@@ -392,6 +392,7 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
               Expanded(
                 child: TextField(
                   controller: _nameController,
+                  textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
                     labelText: 'Workout Name',
                     hintText: 'e.g., Push Day, Leg Day',
@@ -593,6 +594,7 @@ class _PlannedExerciseFormState extends State<_PlannedExerciseForm> {
                 return TextField(
                   controller: controller,
                   focusNode: focusNode,
+                  textCapitalization: TextCapitalization.words,
                   decoration: const InputDecoration(
                     labelText: 'Exercise Name',
                     isDense: true,
