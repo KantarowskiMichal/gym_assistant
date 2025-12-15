@@ -46,6 +46,8 @@ See `spec.md` for detailed data models, screen behaviors, and test specification
 
 Only commit or push when prompted to. Always check if the project is up to date before executing other git commands. Write short and concice commit messges with a title saying what was done and concise bulletpoints of important changes made. 
 
+We follow the following versioning convention: Major.Minor.Patch, when making a commit you will also tag the commit with the appropriate version.
+
 ## Coding Guidelines
 
 Try to adhere to best coding practices, keep the code clean, readable and well structured.
