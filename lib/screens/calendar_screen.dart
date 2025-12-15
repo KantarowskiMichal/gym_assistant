@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/workout.dart';
+import '../models/completed_workout.dart';
 import '../services/workout_storage.dart';
+import '../services/completed_workout_storage.dart';
+import '../widgets/complete_workout_dialog.dart';
+import 'workouts_screen.dart';
 
 const _monthNames = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -19,6 +23,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime? _selectedDate;
   List<Workout> _scheduledWorkouts = [];
   List<Workout> _workoutTemplates = [];
+  List<CompletedWorkout> _completedWorkouts = [];
   bool _isLoading = true;
 
   @override
@@ -34,15 +39,152 @@ class _CalendarScreenState extends State<CalendarScreen> {
     // Load templates (for picker) and scheduled (for calendar) separately
     final templates = await WorkoutStorage.loadTemplates();
     final scheduled = await WorkoutStorage.loadScheduled();
+    final completed = await CompletedWorkoutStorage.loadAll();
     setState(() {
       _workoutTemplates = templates;
       _scheduledWorkouts = scheduled;
+      _completedWorkouts = completed;
       _isLoading = false;
     });
   }
 
   List<Workout> _getWorkoutsForDate(DateTime date) {
-    return _scheduledWorkouts.where((w) => w.occursOn(date)).toList();
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final scheduled = _scheduledWorkouts.where((w) => w.occursOn(date)).toList();
+
+    // Also include orphaned completed workouts (where scheduled workout was deleted)
+    final orphanedCompleted = _completedWorkouts.where((c) {
+      // Check if this completed workout is for this date
+      final sameDate = c.scheduledDate.year == normalizedDate.year &&
+          c.scheduledDate.month == normalizedDate.month &&
+          c.scheduledDate.day == normalizedDate.day;
+      if (!sameDate) return false;
+
+      // Check if the scheduled workout still exists
+      final hasScheduled = scheduled.any((w) => w.id == c.scheduledWorkoutId);
+      return !hasScheduled;
+    }).toList();
+
+    // Convert orphaned completed workouts to virtual Workout objects for display
+    for (final completed in orphanedCompleted) {
+      scheduled.add(Workout(
+        id: completed.scheduledWorkoutId, // Use original ID for lookups
+        name: completed.workoutName,
+        iconCodePoint: completed.iconCodePoint,
+        exercises: completed.exercises,
+        startDate: completed.scheduledDate,
+        recurrenceType: RecurrenceType.oneOff, // Orphaned workouts don't recur
+        offsetDays: null,
+      ));
+    }
+
+    return scheduled;
+  }
+
+  bool _isCompletedForDate(Workout workout, DateTime date) {
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    return _completedWorkouts.any((c) =>
+        c.scheduledWorkoutId == workout.id &&
+        c.scheduledDate.year == normalizedDate.year &&
+        c.scheduledDate.month == normalizedDate.month &&
+        c.scheduledDate.day == normalizedDate.day);
+  }
+
+  CompletedWorkout? _getCompletedForDate(Workout workout, DateTime date) {
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    try {
+      return _completedWorkouts.firstWhere((c) =>
+          c.scheduledWorkoutId == workout.id &&
+          c.scheduledDate.year == normalizedDate.year &&
+          c.scheduledDate.month == normalizedDate.month &&
+          c.scheduledDate.day == normalizedDate.day);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _hasAnyCompletedForDate(DateTime date) {
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    return _completedWorkouts.any((c) =>
+        c.scheduledDate.year == normalizedDate.year &&
+        c.scheduledDate.month == normalizedDate.month &&
+        c.scheduledDate.day == normalizedDate.day);
+  }
+
+  Future<void> _openCompleteDialog(Workout workout, DateTime date) async {
+    final existingCompleted = _getCompletedForDate(workout, date);
+
+    final result = await showDialog<CompletedWorkout>(
+      context: context,
+      builder: (context) => CompleteWorkoutDialog(
+        workout: workout,
+        scheduledDate: date,
+        existingCompleted: existingCompleted,
+      ),
+    );
+
+    if (result != null) {
+      if (existingCompleted != null) {
+        await CompletedWorkoutStorage.updateCompleted(result);
+      } else {
+        await CompletedWorkoutStorage.addCompleted(result);
+      }
+      _loadData();
+    }
+  }
+
+  Future<void> _editWorkout(Workout workout) async {
+    final originalName = workout.name;
+
+    final result = await Navigator.push<Workout>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WorkoutTemplateEditor(existingWorkout: workout),
+      ),
+    );
+
+    if (result != null) {
+      await WorkoutStorage.updateTemplateAndScheduled(result, originalName);
+      _loadData();
+    }
+  }
+
+  Future<void> _toggleCompletion(Workout workout, DateTime date) async {
+    final existingCompleted = _getCompletedForDate(workout, date);
+
+    if (existingCompleted != null) {
+      // Uncomplete - delete the completion record
+      await CompletedWorkoutStorage.deleteCompleted(existingCompleted.id);
+      _loadData();
+    } else {
+      // Prompt user: do you want to make changes?
+      final wantChanges = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Complete Workout'),
+          content: const Text('Do you want to modify the workout before completing?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yes'),
+            ),
+          ],
+        ),
+      );
+
+      if (wantChanges == true) {
+        _openCompleteDialog(workout, date);
+      } else if (wantChanges == false) {
+        // Complete immediately without changes
+        final completed = CompletedWorkout.fromWorkout(workout, date);
+        await CompletedWorkoutStorage.addCompleted(completed);
+        _loadData();
+      }
+    }
   }
 
   void _previousMonth() {
@@ -109,7 +251,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Remove from Calendar'),
-        content: Text('Remove "${workout.name}" from calendar? This will not affect the workout template.'),
+        content: Text('Remove "${workout.name}" from calendar? This will not affect the workout template or completed records.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -210,6 +352,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
             final date = DateTime(_focusedMonth.year, _focusedMonth.month, dayOffset + 1);
             final workouts = _getWorkoutsForDate(date);
+            final hasCompleted = _hasAnyCompletedForDate(date);
+            final allCompleted = workouts.isNotEmpty &&
+                workouts.every((w) => _isCompletedForDate(w, date));
             final isSelected = _selectedDate != null &&
                 date.year == _selectedDate!.year &&
                 date.month == _selectedDate!.month &&
@@ -225,17 +370,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 decoration: BoxDecoration(
                   color: isSelected
                       ? Theme.of(context).colorScheme.primary
-                      : isToday
-                          ? Theme.of(context).colorScheme.primaryContainer
-                          : workouts.isNotEmpty
-                              ? Theme.of(context).colorScheme.surfaceContainerHighest
-                              : null,
+                      : allCompleted
+                          ? Colors.green.withValues(alpha: 0.2)
+                          : isToday
+                              ? Theme.of(context).colorScheme.primaryContainer
+                              : workouts.isNotEmpty
+                                  ? Theme.of(context).colorScheme.surfaceContainerHighest
+                                  : null,
                   borderRadius: BorderRadius.circular(8),
                   border: workouts.isNotEmpty
                       ? Border.all(
                           color: isSelected
                               ? Colors.white
-                              : Theme.of(context).colorScheme.primary,
+                              : allCompleted
+                                  ? Colors.green
+                                  : Theme.of(context).colorScheme.primary,
                           width: 1.5,
                         )
                       : null,
@@ -257,23 +406,38 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          ...workouts.take(2).map((w) => Icon(
-                            w.icon,
-                            size: 12,
-                            color: isSelected
-                                ? Colors.white
-                                : Theme.of(context).colorScheme.primary,
-                          )),
-                          if (workouts.length > 2)
-                            Text(
-                              '+${workouts.length - 2}',
-                              style: TextStyle(
-                                fontSize: 8,
+                          if (allCompleted)
+                            Icon(
+                              Icons.check,
+                              size: 12,
+                              color: isSelected ? Colors.white : Colors.green,
+                            )
+                          else ...[
+                            ...workouts.take(2).map((w) {
+                              final isWorkoutCompleted = _isCompletedForDate(w, date);
+                              return Icon(
+                                isWorkoutCompleted ? Icons.check_circle : w.icon,
+                                size: 12,
                                 color: isSelected
                                     ? Colors.white
-                                    : Theme.of(context).colorScheme.primary,
+                                    : isWorkoutCompleted
+                                        ? Colors.green
+                                        : Theme.of(context).colorScheme.primary,
+                              );
+                            }),
+                            if (workouts.length > 2)
+                              Text(
+                                '+${workouts.length - 2}',
+                                style: TextStyle(
+                                  fontSize: 8,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : hasCompleted
+                                          ? Colors.green
+                                          : Theme.of(context).colorScheme.primary,
+                                ),
                               ),
-                            ),
+                          ],
                         ],
                       ),
                   ],
@@ -323,73 +487,155 @@ class _CalendarScreenState extends State<CalendarScreen> {
     );
   }
 
+  /// Check if a workout is orphaned (only exists because of completed records)
+  bool _isOrphanedWorkout(Workout workout) {
+    return !_scheduledWorkouts.any((w) => w.id == workout.id);
+  }
+
   Widget _buildWorkoutCard(Workout workout) {
+    final isCompleted = _isCompletedForDate(workout, _selectedDate!);
+    final completed = _getCompletedForDate(workout, _selectedDate!);
+    final isOrphaned = _isOrphanedWorkout(workout);
+
     String recurrenceText;
-    switch (workout.recurrenceType) {
-      case RecurrenceType.oneOff:
-        recurrenceText = 'One-time';
-      case RecurrenceType.weekly:
-        recurrenceText = 'Weekly';
-      case RecurrenceType.offset:
-        recurrenceText = 'Every ${workout.offsetDays} days';
+    if (isOrphaned) {
+      recurrenceText = 'Completed';
+    } else {
+      switch (workout.recurrenceType) {
+        case RecurrenceType.oneOff:
+          recurrenceText = 'One-time';
+        case RecurrenceType.weekly:
+          recurrenceText = 'Weekly';
+        case RecurrenceType.offset:
+          recurrenceText = 'Every ${workout.offsetDays} days';
+      }
     }
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(
-                    workout.icon,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    workout.name,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+      color: isCompleted
+          ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
+          : null,
+      child: InkWell(
+        // For orphaned workouts, open the completion dialog; otherwise edit the template
+        onTap: isOrphaned
+            ? () => _openCompleteDialog(workout, _selectedDate!)
+            : () => _editWorkout(workout),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  // Completion checkbox
+                  GestureDetector(
+                    onTap: () => _toggleCompletion(workout, _selectedDate!),
+                    child: Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isCompleted
+                            ? Colors.green
+                            : Theme.of(context).colorScheme.surfaceContainerHighest,
+                        border: isCompleted
+                            ? null
+                            : Border.all(
+                                color: Theme.of(context).colorScheme.outline,
+                                width: 2,
+                              ),
+                      ),
+                      child: isCompleted
+                          ? const Icon(Icons.check, color: Colors.white, size: 20)
+                          : null,
                     ),
                   ),
-                ),
-                Chip(
-                  label: Text(recurrenceText),
-                  visualDensity: VisualDensity.compact,
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close, color: Colors.red),
-                  onPressed: () => _removeFromCalendar(workout),
-                  visualDensity: VisualDensity.compact,
-                  tooltip: 'Remove from calendar',
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '${workout.exercises.length} exercise${workout.exercises.length != 1 ? 's' : ''}',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
-            if (workout.exercises.isNotEmpty)
-              Text(
-                workout.exercises.map((e) => e.exerciseName).join(', '),
-                style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+                  const SizedBox(width: 12),
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: isCompleted
+                          ? Colors.green.withValues(alpha: 0.2)
+                          : Theme.of(context).colorScheme.primaryContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      workout.icon,
+                      color: isCompleted
+                          ? Colors.green
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      workout.name,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        decoration: isCompleted ? TextDecoration.lineThrough : null,
+                        color: isCompleted ? Colors.grey[600] : null,
+                      ),
+                    ),
+                  ),
+                  Chip(
+                    label: Text(recurrenceText),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  // Edit button for completed, X button for pending
+                  if (isCompleted)
+                    IconButton(
+                      icon: const Icon(Icons.edit),
+                      onPressed: () => _openCompleteDialog(workout, _selectedDate!),
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Edit completed workout',
+                    )
+                  else
+                    IconButton(
+                      icon: const Icon(Icons.close, color: Colors.red),
+                      onPressed: () => _removeFromCalendar(workout),
+                      visualDensity: VisualDensity.compact,
+                      tooltip: 'Remove from calendar',
+                    ),
+                ],
               ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                '${isCompleted ? completed!.exercises.length : workout.exercises.length} exercise${(isCompleted ? completed!.exercises.length : workout.exercises.length) != 1 ? 's' : ''}',
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+              if (workout.exercises.isNotEmpty)
+                Text(
+                  (isCompleted ? completed!.exercises : workout.exercises)
+                      .map((e) => e.exerciseName)
+                      .join(', '),
+                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              if (isCompleted)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Completed',
+                        style: TextStyle(
+                          color: Colors.green[700],
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

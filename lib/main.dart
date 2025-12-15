@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'screens/exercises_screen.dart';
 import 'screens/workouts_screen.dart';
+import 'screens/today_screen.dart';
 import 'screens/calendar_screen.dart';
 
 void main() {
@@ -38,6 +39,7 @@ class _MainNavigationState extends State<MainNavigation> {
   final _screens = const [
     ExercisesScreen(),
     WorkoutsScreen(),
+    TodayScreen(),
     CalendarScreen(),
   ];
 
@@ -60,6 +62,10 @@ class _MainNavigationState extends State<MainNavigation> {
           NavigationDestination(
             icon: Icon(Icons.list_alt),
             label: 'Workouts',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.today),
+            label: 'Today',
           ),
           NavigationDestination(
             icon: Icon(Icons.calendar_month),

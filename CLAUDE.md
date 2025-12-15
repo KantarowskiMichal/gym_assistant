@@ -42,6 +42,14 @@ lib/
 
 See `spec.md` for detailed data models, screen behaviors, and test specifications. Modify this file as the user requests new features or changes existing spec. keep the spec concise and well structured.
 
-## Coding guidelines
+## Git Guidelines
+
+Only commit or push when prompted to. Always check if the project is up to date before executing other git commands. Write short and concice commit messges with a title saying what was done and concise bulletpoints of important changes made. 
+
+## Coding Guidelines
 
 Try to adhere to best coding practices, keep the code clean, readable and well structured.
+
+## CLAUDE.md guidlines
+
+if important changes are made, or changes that would conflict with the information already in CLAUDE.md modify it to adjust for them.

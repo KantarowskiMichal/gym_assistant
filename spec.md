@@ -2,7 +2,7 @@
 
 ## Overview
 
-A workout planning app with three main screens: Exercises, Workouts, and Calendar.
+A workout planning app with four main screens: Exercises, Workouts, Today, and Calendar.
 
 ---
 
@@ -42,6 +42,27 @@ Extends Workout with scheduling:
 | recurrenceType | Enum | `oneOff`, `weekly`, or `offset` |
 | offsetDays | int? | Days between occurrences (for offset type) |
 
+### CompletedWorkout
+
+Snapshot of a workout when marked complete:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| id | String | Unique identifier |
+| scheduledWorkoutId | String | Reference to original scheduled workout |
+| workoutName | String | Name (preserved even if template deleted) |
+| iconCodePoint | int | Icon (preserved) |
+| exercises | List | Exercises snapshot with actual values |
+| scheduledDate | DateTime | The date it was scheduled for |
+| completedAt | DateTime | When user marked it complete |
+
+**Key Behavior:**
+- Completed workouts are SNAPSHOTS - they preserve workout data at time of completion
+- User can modify exercise data (sets, reps, weight) before saving completion
+- User can edit a completed workout at any later time
+- Completion is tracked per (scheduledWorkoutId + scheduledDate) pair
+- Deleting a workout template does NOT delete completed workout records
+
 ---
 
 ## Screens
@@ -77,9 +98,28 @@ Extends Workout with scheduling:
   - Automatically add to exercises list
   - Use entered values as defaults
 
-### 3. Calendar Screen
+### 3. Today Screen
 
-**Purpose:** Schedule workouts on specific dates.
+**Purpose:** View and complete today's scheduled workouts.
+
+**Display:**
+- Shows all workouts scheduled for current date
+- Visual indication for completed vs pending workouts
+- Green checkmark and different background for completed workouts
+
+**Completion Workflow:**
+- Tap workout card: Opens completion dialog
+- Tap checkbox: Toggles completion status
+- On complete: Opens dialog to optionally modify exercise data (sets, reps, weight)
+- Can add/remove exercises before completing
+- Can edit completed workouts later by tapping again
+
+**Uncomplete:**
+- Tapping checkbox on completed workout removes completion record
+
+### 4. Calendar Screen
+
+**Purpose:** Schedule workouts on specific dates and track completion.
 
 **Scheduling:**
 - Select date, pick existing workout template
@@ -89,10 +129,17 @@ Extends Workout with scheduling:
 **Display:**
 - Shows workout icons on calendar days
 - Lists scheduled workouts for selected day
+- Visual indication for completed workouts (green border, checkmark)
+- Days with all workouts completed show green background
+
+**Completion:**
+- Can mark workouts complete from any date (not just today)
+- Same completion workflow as Today screen
 
 **Removal:**
 - Removing from calendar removes scheduled instance only
 - Does NOT remove workout template from Workouts screen
+- Does NOT remove completed workout records
 
 ---
 
@@ -112,6 +159,16 @@ Two separate collections:
 |-----|---------|
 | `workout_templates` | Workout templates (no dates) |
 | `scheduled_workouts` | Scheduled instances (with dates/recurrence) |
+
+### Completed Workout Storage
+
+| Key | Content |
+|-----|---------|
+| `completed_workouts` | Archived completed workout records |
+
+**Behavior:**
+- Separate from scheduled workouts (preserved even if template deleted)
+- Used for history and future analytics features
 
 ---
 
@@ -237,6 +294,7 @@ Templates (workout_templates key):
   addTemplate(w) → appends to templates list
   updateTemplate(w) → updates by id in templates
   deleteTemplate(id) → removes from templates AND all scheduled with same name
+                    → does NOT affect completed_workouts (preserved for history)
 
 Scheduled (scheduled_workouts key):
   loadScheduled() → returns scheduled instances only
@@ -251,6 +309,53 @@ migrateIfNeeded()
     → moves old data to workout_templates
     → removes old key
   → if already migrated, does nothing
+```
+
+### CompletedWorkout
+
+```
+CompletedWorkout.fromWorkout(workout, scheduledDate, {modifiedExercises})
+  → generates unique id (timestamp-based)
+  → copies workout name, icon, exercises (or uses modifiedExercises if provided)
+  → stores scheduledWorkoutId reference
+  → sets completedAt to now
+
+CompletedWorkout.copyWith(...)
+  → returns new instance with updated fields
+  → used for editing completed workouts
+
+CompletedWorkout.fromJson → toJson
+  → roundtrip preserves all fields
+```
+
+### CompletedWorkoutStorage
+
+```
+loadAll()
+  → returns all completed workout records
+  → returns empty list if none stored
+
+addCompleted(workout)
+  → appends to completed list
+  → saves to storage
+
+updateCompleted(workout)
+  → updates existing by id
+  → used for editing completed workouts
+
+deleteCompleted(id)
+  → removes from completed list by id
+
+findCompleted(scheduledWorkoutId, date)
+  → returns completed workout matching both scheduledWorkoutId AND date
+  → returns null if not found
+
+getCompletedForDate(date)
+  → returns all completed workouts for a specific date
+
+isCompleted(scheduledWorkoutId, date)
+  → returns true if workout is completed for that date
+  → returns false otherwise
 ```
 
 ### Screen Flows
@@ -284,13 +389,27 @@ WorkoutsScreen:
     → After autocomplete selection: fills defaults, no auto-clear
     → Editing existing: values preserved, no auto-clear
 
+TodayScreen:
+  onLoad → getScheduledForDate(today) + getCompletedForDate(today)
+  onTapWorkout → opens CompleteWorkoutDialog
+  onToggleComplete:
+    → if not completed: opens CompleteWorkoutDialog
+    → if completed: deleteCompleted()
+
+  CompleteWorkoutDialog:
+    → shows editable exercise list (sets, reps, weight)
+    → can remove exercises or add from available exercises
+    → on save: creates CompletedWorkout with modified values
+
 CalendarScreen:
-  onLoad → loadTemplates() + loadScheduled()
+  onLoad → loadTemplates() + loadScheduled() + loadAll() (completed)
   onSchedule:
     → pick template from loadTemplates()
     → create new Workout with new id, selected date, recurrence
     → addScheduled() → reload
-  onRemove → deleteScheduled() (does not affect template)
+  onRemove → deleteScheduled() (does not affect template or completed)
+  onTapWorkout → opens CompleteWorkoutDialog for selected date
+  onToggleComplete → same as TodayScreen but for selected date
 
   Schedule dialog:
     → offset days defaults to 1
@@ -299,4 +418,6 @@ CalendarScreen:
   CalendarGrid:
     → for each day: getScheduledForDate() or filter locally
     → show icons of matching workouts
+    → show green indicators for completed workouts
+    → show checkmark if all workouts for day are completed
 ```

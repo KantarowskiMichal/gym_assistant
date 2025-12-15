@@ -51,12 +51,50 @@ class WorkoutStorage {
     }
   }
 
+  /// Update a template by name AND sync changes to all scheduled instances with the same name.
+  /// Completed workouts are not affected (they're snapshots).
+  static Future<void> updateTemplateAndScheduled(Workout updatedWorkout, String originalName) async {
+    // 1. Update the template by name (not by ID, since scheduled workouts have different IDs)
+    final templates = await loadTemplates();
+    final templateIndex = templates.indexWhere((w) => w.name == originalName);
+    if (templateIndex != -1) {
+      // Preserve the template's original ID
+      final originalTemplate = templates[templateIndex];
+      templates[templateIndex] = Workout(
+        id: originalTemplate.id,
+        name: updatedWorkout.name,
+        iconCodePoint: updatedWorkout.iconCodePoint,
+        exercises: updatedWorkout.exercises,
+        startDate: originalTemplate.startDate,
+        recurrenceType: originalTemplate.recurrenceType,
+        offsetDays: originalTemplate.offsetDays,
+      );
+      await saveTemplates(templates);
+    }
+
+    // 2. Update all scheduled instances with the original name
+    final scheduled = await loadScheduled();
+    final updatedScheduled = scheduled.map((w) {
+      if (w.name == originalName) {
+        return w.copyWith(
+          name: updatedWorkout.name,
+          icon: updatedWorkout.icon,
+          exercises: updatedWorkout.exercises,
+        );
+      }
+      return w;
+    }).toList();
+    await saveScheduled(updatedScheduled);
+  }
+
   static Future<void> deleteTemplate(String id) async {
     final templates = await loadTemplates();
     final templateToDelete = templates.where((w) => w.id == id).firstOrNull;
 
     if (templateToDelete != null) {
-      // Also delete all scheduled instances with the same name
+      // Delete all scheduled instances with the same name
+      // Note: Completed workouts (in CompletedWorkoutStorage) are preserved
+      // for history/analytics purposes - they are separate snapshots
       final scheduled = await loadScheduled();
       scheduled.removeWhere((w) => w.name == templateToDelete.name);
       await saveScheduled(scheduled);

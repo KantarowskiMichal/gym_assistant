@@ -1,0 +1,311 @@
+import 'package:flutter/material.dart';
+import '../models/workout.dart';
+import '../models/completed_workout.dart';
+import '../services/workout_storage.dart';
+import '../services/completed_workout_storage.dart';
+import '../widgets/complete_workout_dialog.dart';
+import 'workouts_screen.dart';
+
+class TodayScreen extends StatefulWidget {
+  const TodayScreen({super.key});
+
+  @override
+  State<TodayScreen> createState() => _TodayScreenState();
+}
+
+class _TodayScreenState extends State<TodayScreen> {
+  List<Workout> _todayWorkouts = [];
+  Map<String, CompletedWorkout> _completedMap = {};
+  bool _isLoading = true;
+  final DateTime _today = DateTime.now();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final scheduled = await WorkoutStorage.getScheduledForDate(_today);
+    final completed = await CompletedWorkoutStorage.getCompletedForDate(_today);
+
+    // Build a map of scheduledWorkoutId -> CompletedWorkout for quick lookup
+    final completedMap = <String, CompletedWorkout>{};
+    for (final c in completed) {
+      completedMap[c.scheduledWorkoutId] = c;
+    }
+
+    setState(() {
+      _todayWorkouts = scheduled;
+      _completedMap = completedMap;
+      _isLoading = false;
+    });
+  }
+
+  bool _isCompleted(Workout workout) {
+    return _completedMap.containsKey(workout.id);
+  }
+
+  CompletedWorkout? _getCompleted(Workout workout) {
+    return _completedMap[workout.id];
+  }
+
+  Future<void> _openCompleteDialog(Workout workout) async {
+    final existingCompleted = _getCompleted(workout);
+
+    final result = await showDialog<CompletedWorkout>(
+      context: context,
+      builder: (context) => CompleteWorkoutDialog(
+        workout: workout,
+        scheduledDate: _today,
+        existingCompleted: existingCompleted,
+      ),
+    );
+
+    if (result != null) {
+      if (existingCompleted != null) {
+        await CompletedWorkoutStorage.updateCompleted(result);
+      } else {
+        await CompletedWorkoutStorage.addCompleted(result);
+      }
+      _loadData();
+    }
+  }
+
+  Future<void> _editWorkout(Workout workout) async {
+    final originalName = workout.name;
+
+    final result = await Navigator.push<Workout>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => WorkoutTemplateEditor(existingWorkout: workout),
+      ),
+    );
+
+    if (result != null) {
+      await WorkoutStorage.updateTemplateAndScheduled(result, originalName);
+      _loadData();
+    }
+  }
+
+  Future<void> _toggleCompletion(Workout workout) async {
+    final existingCompleted = _getCompleted(workout);
+
+    if (existingCompleted != null) {
+      // Uncomplete - delete the completion record
+      await CompletedWorkoutStorage.deleteCompleted(existingCompleted.id);
+      _loadData();
+    } else {
+      // Prompt user: do you want to make changes?
+      final wantChanges = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Complete Workout'),
+          content: const Text('Do you want to modify the workout before completing?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('No'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yes'),
+            ),
+          ],
+        ),
+      );
+
+      if (wantChanges == true) {
+        _openCompleteDialog(workout);
+      } else if (wantChanges == false) {
+        // Complete immediately without changes
+        final completed = CompletedWorkout.fromWorkout(workout, _today);
+        await CompletedWorkoutStorage.addCompleted(completed);
+        _loadData();
+      }
+    }
+  }
+
+  String get _formattedDate {
+    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return '${days[_today.weekday - 1]}, ${months[_today.month - 1]} ${_today.day}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Today'),
+            Text(
+              _formattedDate,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.normal,
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
+      ),
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : _todayWorkouts.isEmpty
+              ? _buildEmptyState()
+              : _buildWorkoutList(),
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.event_available,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No workouts scheduled for today',
+            style: TextStyle(
+              fontSize: 18,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Schedule workouts in the Calendar tab',
+            style: TextStyle(
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWorkoutList() {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _todayWorkouts.length,
+      itemBuilder: (context, index) {
+        final workout = _todayWorkouts[index];
+        return _buildWorkoutCard(workout);
+      },
+    );
+  }
+
+  Widget _buildWorkoutCard(Workout workout) {
+    final isCompleted = _isCompleted(workout);
+    final completed = _getCompleted(workout);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      color: isCompleted
+          ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
+          : null,
+      child: InkWell(
+        onTap: () => _editWorkout(workout),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              // Completion checkbox
+              GestureDetector(
+                onTap: () => _toggleCompletion(workout),
+                child: Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: isCompleted
+                        ? Colors.green
+                        : Theme.of(context).colorScheme.surfaceContainerHighest,
+                    border: isCompleted
+                        ? null
+                        : Border.all(
+                            color: Theme.of(context).colorScheme.outline,
+                            width: 2,
+                          ),
+                  ),
+                  child: isCompleted
+                      ? const Icon(Icons.check, color: Colors.white, size: 20)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 12),
+
+              // Icon
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: isCompleted
+                      ? Colors.green.withValues(alpha: 0.2)
+                      : Theme.of(context).colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  workout.icon,
+                  color: isCompleted
+                      ? Colors.green
+                      : Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              const SizedBox(width: 16),
+
+              // Workout info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      workout.name,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        decoration: isCompleted ? TextDecoration.lineThrough : null,
+                        color: isCompleted ? Colors.grey[600] : null,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${isCompleted ? completed!.exercises.length : workout.exercises.length} exercise${(isCompleted ? completed!.exercises.length : workout.exercises.length) != 1 ? 's' : ''}',
+                      style: TextStyle(color: Colors.grey[600]),
+                    ),
+                    if (workout.exercises.isNotEmpty)
+                      Text(
+                        (isCompleted ? completed!.exercises : workout.exercises)
+                            .map((e) => e.exerciseName)
+                            .join(', '),
+                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+
+              // Edit button for completed, chevron for pending
+              if (isCompleted)
+                IconButton(
+                  icon: const Icon(Icons.edit),
+                  onPressed: () => _openCompleteDialog(workout),
+                  tooltip: 'Edit completed workout',
+                )
+              else
+                Icon(Icons.chevron_right, color: Colors.grey[400]),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
