@@ -59,6 +59,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
       defaultWeight: planned.targetWeight,
       defaultRestBetweenSets: planned.restBetweenSets,
       defaultRestBetweenSetsPerSet: planned.restBetweenSetsPerSet,
+      defaultRestAfterExercise: planned.restAfterExercise,
     );
 
     final success = await ExerciseStorage.addExercise(exercise);
@@ -84,6 +85,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
       defaultWeight: planned.targetWeight,
       defaultRestBetweenSets: planned.restBetweenSets,
       defaultRestBetweenSetsPerSet: planned.restBetweenSetsPerSet,
+      defaultRestAfterExercise: planned.restAfterExercise,
     );
 
     final success = await ExerciseStorage.updateExercise(updated);
@@ -128,6 +130,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
               ? List.filled(exercise.defaultSets, exercise.defaultRestBetweenSets!)
               : null))
           : null,
+      restAfterExercise: exercise.defaultRestAfterExercise,
     );
   }
 
@@ -154,6 +157,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                     onSave: _saveNewExercise,
                     onCancel: _cancelEdit,
                     autoAddNewExercises: false,
+                    showRestAfterExercise: true,
                   ),
 
                 ..._exercises.map((exercise) {
@@ -166,6 +170,7 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
                       onCancel: _cancelEdit,
                       onDelete: exercise.isCustom ? () => _deleteExercise(exercise) : null,
                       autoAddNewExercises: false,
+                      showRestAfterExercise: true,
                     );
                   }
 

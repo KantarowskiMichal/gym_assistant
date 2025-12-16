@@ -88,10 +88,10 @@ class _CompleteWorkoutDialogState extends State<CompleteWorkoutDialog> {
     Navigator.pop(context, result);
   }
 
+  bool get _isEditing => widget.existingCompleted != null;
+
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.existingCompleted != null;
-
     return Dialog(
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -104,147 +104,150 @@ class _CompleteWorkoutDialogState extends State<CompleteWorkoutDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
-              Row(
-                children: [
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      widget.workout.icon,
-                      color: Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          isEditing
-                              ? 'Edit Completed Workout'
-                              : 'Complete Workout',
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          widget.workout.name,
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
+              _buildHeader(),
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 8),
-
-              // Exercise list
-              Flexible(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Exercises',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          if (!_isAddingExercise)
-                            TextButton.icon(
-                              onPressed: () => setState(() {
-                                _isAddingExercise = true;
-                                _expandedExerciseIndex = null;
-                              }),
-                              icon: const Icon(Icons.add),
-                              label: const Text('Add'),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-
-                      // Add exercise form at top
-                      if (_isAddingExercise)
-                        ExerciseFormWidget(
-                          onSave: _addExercise,
-                          onCancel: _cancelEdit,
-                          showRestAfterExercise: true,
-                        ),
-
-                      if (_exercises.isEmpty && !_isAddingExercise)
-                        const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text(
-                            'No exercises. Tap "Add" to add some.',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                        ),
-
-                      ..._exercises.asMap().entries.map((entry) {
-                        final index = entry.key;
-                        final exercise = entry.value;
-                        final isExpanded = _expandedExerciseIndex == index;
-
-                        if (isExpanded) {
-                          return ExerciseFormWidget(
-                            exercise: exercise,
-                            onSave: (e) => _updateExercise(index, e),
-                            onCancel: _cancelEdit,
-                            onDelete: () => _removeExercise(index),
-                            showNameField: false,
-                            showRestAfterExercise: true,
-                          );
-                        }
-
-                        return _CompactExerciseCard(
-                          exercise: exercise,
-                          onTap: () => setState(() {
-                            _expandedExerciseIndex = index;
-                            _isAddingExercise = false;
-                          }),
-                          onRemove: () => _removeExercise(index),
-                        );
-                      }),
-                    ],
-                  ),
-                ),
-              ),
-
+              Flexible(child: _buildExerciseList()),
               const Divider(),
               const SizedBox(height: 8),
-
-              // Actions
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _save,
-                    child: Text(isEditing ? 'Save Changes' : 'Mark Complete'),
-                  ),
-                ],
-              ),
+              _buildActions(),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            widget.workout.icon,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _isEditing ? 'Edit Completed Workout' : 'Complete Workout',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              Text(
+                widget.workout.name,
+                style: TextStyle(color: Colors.grey[600]),
+              ),
+            ],
+          ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildExerciseList() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildExerciseListHeader(),
+          const SizedBox(height: 8),
+          if (_isAddingExercise)
+            ExerciseFormWidget(
+              onSave: _addExercise,
+              onCancel: _cancelEdit,
+              showRestAfterExercise: true,
+            ),
+          if (_exercises.isEmpty && !_isAddingExercise)
+            _buildEmptyState(),
+          ..._buildExerciseItems(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExerciseListHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text('Exercises', style: TextStyle(fontWeight: FontWeight.bold)),
+        if (!_isAddingExercise)
+          TextButton.icon(
+            onPressed: () => setState(() {
+              _isAddingExercise = true;
+              _expandedExerciseIndex = null;
+            }),
+            icon: const Icon(Icons.add),
+            label: const Text('Add'),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return const Padding(
+      padding: EdgeInsets.all(16),
+      child: Text(
+        'No exercises. Tap "Add" to add some.',
+        style: TextStyle(color: Colors.grey),
+      ),
+    );
+  }
+
+  List<Widget> _buildExerciseItems() {
+    return _exercises.asMap().entries.map((entry) {
+      final index = entry.key;
+      final exercise = entry.value;
+
+      if (_expandedExerciseIndex == index) {
+        return ExerciseFormWidget(
+          exercise: exercise,
+          onSave: (e) => _updateExercise(index, e),
+          onCancel: _cancelEdit,
+          onDelete: () => _removeExercise(index),
+          showNameField: false,
+          showRestAfterExercise: true,
+        );
+      }
+
+      return _CompactExerciseCard(
+        exercise: exercise,
+        onTap: () => setState(() {
+          _expandedExerciseIndex = index;
+          _isAddingExercise = false;
+        }),
+        onRemove: () => _removeExercise(index),
+      );
+    }).toList();
+  }
+
+  Widget _buildActions() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          onPressed: _save,
+          child: Text(_isEditing ? 'Save Changes' : 'Mark Complete'),
+        ),
+      ],
     );
   }
 }
@@ -325,16 +328,10 @@ class _CompactExerciseCard extends StatelessWidget {
     );
   }
 
-  Color? _getModeColor(ExerciseMode mode) {
-    switch (mode) {
-      case ExerciseMode.reps:
-        return Colors.green[100];
-      case ExerciseMode.variableSets:
-        return Colors.blue[100];
-      case ExerciseMode.pyramid:
-        return Colors.purple[100];
-      case ExerciseMode.static:
-        return Colors.orange[100];
-    }
-  }
+  Color? _getModeColor(ExerciseMode mode) => switch (mode) {
+    ExerciseMode.reps => Colors.green[100],
+    ExerciseMode.variableSets => Colors.blue[100],
+    ExerciseMode.pyramid => Colors.purple[100],
+    ExerciseMode.static => Colors.orange[100],
+  };
 }

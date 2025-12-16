@@ -118,47 +118,82 @@ class _ExerciseFormWidgetState extends State<ExerciseFormWidget> {
 
   void _onExerciseSelected(String name) async {
     final exercise = await ExerciseStorage.findByName(name);
-    if (exercise != null) {
-      setState(() {
-        _mode = exercise.mode;
-        _setsController.text = exercise.defaultSets.toString();
-        _repsController.text = exercise.defaultReps.toString();
-        _pyramidTopController.text = exercise.defaultPyramidTop.toString();
-        _secondsController.text = exercise.defaultSeconds.toString();
-        _weightController.text = exercise.defaultWeight.toString();
-        _setCount = exercise.defaultSets;
-        // Use stored per-set values if available, otherwise fill with default reps
-        _initialRepsPerSet = exercise.defaultRepsPerSet != null
-            ? List<int>.from(exercise.defaultRepsPerSet!)
-            : List.filled(exercise.defaultSets, exercise.defaultReps);
-        // Set rest values
-        _initialRestBetweenSets = exercise.defaultRestBetweenSets ?? 0;
-        _initialRestPerSet = exercise.defaultRestBetweenSetsPerSet != null
-            ? List<int>.from(exercise.defaultRestBetweenSetsPerSet!)
-            : [];
-      });
-      Future.delayed(Duration.zero, () {
-        // Update per-set reps
-        if (exercise.defaultRepsPerSet != null && exercise.defaultRepsPerSet!.isNotEmpty) {
-          _repsInputKey.currentState?.setValues(exercise.defaultRepsPerSet!);
-        } else {
-          _repsInputKey.currentState?.fillAllWith(exercise.defaultReps);
-        }
-        // Update rest input based on mode
-        if (exercise.mode == ExerciseMode.variableSets) {
-          if (exercise.defaultRestBetweenSetsPerSet != null &&
-              exercise.defaultRestBetweenSetsPerSet!.isNotEmpty) {
-            _perSetRestInputKey.currentState?.setValues(exercise.defaultRestBetweenSetsPerSet!);
-          } else if (exercise.defaultRestBetweenSets != null && exercise.defaultRestBetweenSets! > 0) {
-            _perSetRestInputKey.currentState?.fillAllWith(exercise.defaultRestBetweenSets!);
-          }
-        } else {
-          // For reps, pyramid, static modes - update the single rest input
-          if (exercise.defaultRestBetweenSets != null && exercise.defaultRestBetweenSets! > 0) {
-            _restInputKey.currentState?.setTotalSeconds(exercise.defaultRestBetweenSets!);
-          }
-        }
-      });
+    if (exercise == null) return;
+
+    _applyExerciseDefaults(exercise);
+    Future.delayed(Duration.zero, () => _applyExerciseWidgetValues(exercise));
+  }
+
+  void _applyExerciseDefaults(Exercise exercise) {
+    setState(() {
+      _mode = exercise.mode;
+      _setsController.text = exercise.defaultSets.toString();
+      _repsController.text = exercise.defaultReps.toString();
+      _pyramidTopController.text = exercise.defaultPyramidTop.toString();
+      _secondsController.text = exercise.defaultSeconds.toString();
+      _weightController.text = exercise.defaultWeight.toString();
+      _setCount = exercise.defaultSets;
+      _initialRepsPerSet = exercise.defaultRepsPerSet != null
+          ? List<int>.from(exercise.defaultRepsPerSet!)
+          : List.filled(exercise.defaultSets, exercise.defaultReps);
+      _initialRestBetweenSets = exercise.defaultRestBetweenSets ?? 0;
+      _initialRestPerSet = exercise.defaultRestBetweenSetsPerSet != null
+          ? List<int>.from(exercise.defaultRestBetweenSetsPerSet!)
+          : [];
+      _initialRestAfterExercise = exercise.defaultRestAfterExercise ?? 0;
+    });
+  }
+
+  void _applyExerciseWidgetValues(Exercise exercise) {
+    _applyPerSetRepsValues(exercise);
+    _applyRestValues(exercise);
+    _applyRestAfterExerciseValue(exercise);
+  }
+
+  void _applyRestAfterExerciseValue(Exercise exercise) {
+    final hasRestAfter = exercise.defaultRestAfterExercise != null &&
+        exercise.defaultRestAfterExercise! > 0;
+    if (hasRestAfter) {
+      _restAfterExerciseKey.currentState?.setTotalSeconds(exercise.defaultRestAfterExercise!);
+    }
+  }
+
+  void _applyPerSetRepsValues(Exercise exercise) {
+    final hasPerSetReps = exercise.defaultRepsPerSet != null &&
+        exercise.defaultRepsPerSet!.isNotEmpty;
+    if (hasPerSetReps) {
+      _repsInputKey.currentState?.setValues(exercise.defaultRepsPerSet!);
+    } else {
+      _repsInputKey.currentState?.fillAllWith(exercise.defaultReps);
+    }
+  }
+
+  void _applyRestValues(Exercise exercise) {
+    if (exercise.mode == ExerciseMode.variableSets) {
+      _applyVariableSetsRestValues(exercise);
+    } else {
+      _applySingleRestValue(exercise);
+    }
+  }
+
+  void _applyVariableSetsRestValues(Exercise exercise) {
+    final hasPerSetRest = exercise.defaultRestBetweenSetsPerSet != null &&
+        exercise.defaultRestBetweenSetsPerSet!.isNotEmpty;
+    final hasSingleRest = exercise.defaultRestBetweenSets != null &&
+        exercise.defaultRestBetweenSets! > 0;
+
+    if (hasPerSetRest) {
+      _perSetRestInputKey.currentState?.setValues(exercise.defaultRestBetweenSetsPerSet!);
+    } else if (hasSingleRest) {
+      _perSetRestInputKey.currentState?.fillAllWith(exercise.defaultRestBetweenSets!);
+    }
+  }
+
+  void _applySingleRestValue(Exercise exercise) {
+    final hasRest = exercise.defaultRestBetweenSets != null &&
+        exercise.defaultRestBetweenSets! > 0;
+    if (hasRest) {
+      _restInputKey.currentState?.setTotalSeconds(exercise.defaultRestBetweenSets!);
     }
   }
 
@@ -177,174 +212,190 @@ class _ExerciseFormWidgetState extends State<ExerciseFormWidget> {
 
   void _submit() async {
     final name = _nameController.text.trim();
-    final weight = double.tryParse(_weightController.text) ?? 0;
 
     if (widget.showNameField && name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter exercise name')),
-      );
+      _showError('Please enter exercise name');
       return;
     }
 
-    PlannedExercise result;
+    final result = _buildPlannedExercise(name);
+    if (result == null) return;
 
-    // Get rest values
-    final restBetweenSets = _restInputKey.currentState?.totalSeconds;
-    final restPerSetValues = _perSetRestInputKey.currentState?.values;
-    final restAfterExercise = widget.showRestAfterExercise
-        ? _restAfterExerciseKey.currentState?.totalSeconds
-        : null;
+    await _autoAddExerciseIfNeeded(name);
+    widget.onSave(result);
+  }
 
-    switch (_mode) {
-      case ExerciseMode.reps:
-        final sets = int.tryParse(_setsController.text);
-        final reps = int.tryParse(_repsController.text);
-        if (sets == null || sets <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sets must be at least 1')),
-          );
-          return;
-        }
-        if (reps == null || reps <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Reps must be at least 1')),
-          );
-          return;
-        }
-        result = PlannedExercise(
-          exerciseName: name.isNotEmpty ? name : widget.exercise!.exerciseName,
-          mode: _mode,
-          targetSets: sets,
-          targetReps: reps,
-          targetWeight: weight,
-          restBetweenSets: restBetweenSets != null && restBetweenSets > 0 ? restBetweenSets : null,
-          restAfterExercise: restAfterExercise != null && restAfterExercise > 0 ? restAfterExercise : null,
-        );
-        break;
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
 
-      case ExerciseMode.variableSets:
-        final sets = int.tryParse(_setsController.text);
-        if (sets == null || sets <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sets must be at least 1')),
-          );
-          return;
-        }
-        final repsValues = _repsInputKey.currentState?.values ?? [];
-        if (repsValues.isEmpty || repsValues.first == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please enter reps for at least the first set')),
-          );
-          return;
-        }
-        // Build reps list, filling empty from previous
-        final repsPerSet = <int>[];
-        for (int i = 0; i < repsValues.length; i++) {
-          final value = repsValues[i];
-          if (value != null && value > 0) {
-            repsPerSet.add(value);
-          } else if (repsPerSet.isNotEmpty) {
-            repsPerSet.add(repsPerSet.last);
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Please enter valid values for all sets')),
-            );
-            return;
-          }
-        }
-        // Build rest per set list, filling empty from previous
-        List<int>? restPerSet;
-        if (restPerSetValues != null && restPerSetValues.isNotEmpty) {
-          restPerSet = <int>[];
-          for (int i = 0; i < restPerSetValues.length; i++) {
-            final value = restPerSetValues[i];
-            if (value != null && value > 0) {
-              restPerSet.add(value);
-            } else if (restPerSet.isNotEmpty) {
-              restPerSet.add(restPerSet.last);
-            } else {
-              restPerSet.add(0); // No rest specified
-            }
-          }
-          // Check if all zeros, then set to null
-          if (restPerSet.every((r) => r == 0)) {
-            restPerSet = null;
-          }
-        }
-        result = PlannedExercise(
-          exerciseName: name.isNotEmpty ? name : widget.exercise!.exerciseName,
-          mode: _mode,
-          targetSets: sets,
-          targetRepsPerSet: repsPerSet,
-          targetWeight: weight,
-          restBetweenSetsPerSet: restPerSet,
-          restAfterExercise: restAfterExercise != null && restAfterExercise > 0 ? restAfterExercise : null,
-        );
-        break;
+  String _getExerciseName(String name) {
+    return name.isNotEmpty ? name : widget.exercise!.exerciseName;
+  }
 
-      case ExerciseMode.pyramid:
-        final pyramidTop = int.tryParse(_pyramidTopController.text);
-        if (pyramidTop == null || pyramidTop <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Pyramid top must be at least 1')),
-          );
-          return;
-        }
-        result = PlannedExercise(
-          exerciseName: name.isNotEmpty ? name : widget.exercise!.exerciseName,
-          mode: _mode,
-          pyramidTop: pyramidTop,
-          targetWeight: weight,
-          restBetweenSets: restBetweenSets != null && restBetweenSets > 0 ? restBetweenSets : null,
-          restAfterExercise: restAfterExercise != null && restAfterExercise > 0 ? restAfterExercise : null,
-        );
-        break;
+  int? _getRestAfterExercise() {
+    if (!widget.showRestAfterExercise) return null;
+    final value = _restAfterExerciseKey.currentState?.totalSeconds;
+    return (value != null && value > 0) ? value : null;
+  }
 
-      case ExerciseMode.static:
-        final sets = int.tryParse(_setsController.text);
-        final seconds = int.tryParse(_secondsController.text);
-        if (sets == null || sets <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Sets must be at least 1')),
-          );
-          return;
-        }
-        if (seconds == null || seconds <= 0) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Seconds must be at least 1')),
-          );
-          return;
-        }
-        result = PlannedExercise(
-          exerciseName: name.isNotEmpty ? name : widget.exercise!.exerciseName,
-          mode: _mode,
-          targetSets: sets,
-          targetSeconds: seconds,
-          targetWeight: weight,
-          restBetweenSets: restBetweenSets != null && restBetweenSets > 0 ? restBetweenSets : null,
-          restAfterExercise: restAfterExercise != null && restAfterExercise > 0 ? restAfterExercise : null,
-        );
-        break;
+  int? _getRestBetweenSets() {
+    final value = _restInputKey.currentState?.totalSeconds;
+    return (value != null && value > 0) ? value : null;
+  }
+
+  PlannedExercise? _buildPlannedExercise(String name) {
+    return switch (_mode) {
+      ExerciseMode.reps => _buildRepsExercise(name),
+      ExerciseMode.variableSets => _buildVariableSetsExercise(name),
+      ExerciseMode.pyramid => _buildPyramidExercise(name),
+      ExerciseMode.static => _buildStaticExercise(name),
+    };
+  }
+
+  PlannedExercise? _buildRepsExercise(String name) {
+    final sets = int.tryParse(_setsController.text);
+    final reps = int.tryParse(_repsController.text);
+
+    if (sets == null || sets <= 0) {
+      _showError('Sets must be at least 1');
+      return null;
+    }
+    if (reps == null || reps <= 0) {
+      _showError('Reps must be at least 1');
+      return null;
     }
 
-    // Auto-add new exercise if enabled
-    if (widget.autoAddNewExercises && name.isNotEmpty) {
-      final existingExercise = await ExerciseStorage.findByName(name);
-      if (existingExercise == null) {
-        final newExercise = Exercise.create(
-          name: name,
-          mode: _mode,
-          defaultSets: int.tryParse(_setsController.text) ?? 4,
-          defaultReps: int.tryParse(_repsController.text) ?? 10,
-          defaultPyramidTop: int.tryParse(_pyramidTopController.text) ?? 10,
-          defaultSeconds: int.tryParse(_secondsController.text) ?? 30,
-          defaultWeight: weight,
-        );
-        await ExerciseStorage.addExercise(newExercise);
+    return PlannedExercise(
+      exerciseName: _getExerciseName(name),
+      mode: _mode,
+      targetSets: sets,
+      targetReps: reps,
+      targetWeight: double.tryParse(_weightController.text) ?? 0,
+      restBetweenSets: _getRestBetweenSets(),
+      restAfterExercise: _getRestAfterExercise(),
+    );
+  }
+
+  PlannedExercise? _buildVariableSetsExercise(String name) {
+    final sets = int.tryParse(_setsController.text);
+    if (sets == null || sets <= 0) {
+      _showError('Sets must be at least 1');
+      return null;
+    }
+
+    final repsPerSet = _buildRepsPerSetList();
+    if (repsPerSet == null) return null;
+
+    return PlannedExercise(
+      exerciseName: _getExerciseName(name),
+      mode: _mode,
+      targetSets: sets,
+      targetRepsPerSet: repsPerSet,
+      targetWeight: double.tryParse(_weightController.text) ?? 0,
+      restBetweenSetsPerSet: _buildRestPerSetList(),
+      restAfterExercise: _getRestAfterExercise(),
+    );
+  }
+
+  List<int>? _buildRepsPerSetList() {
+    final repsValues = _repsInputKey.currentState?.values ?? [];
+    if (repsValues.isEmpty || repsValues.first == null) {
+      _showError('Please enter reps for at least the first set');
+      return null;
+    }
+
+    final repsPerSet = <int>[];
+    for (final value in repsValues) {
+      if (value != null && value > 0) {
+        repsPerSet.add(value);
+      } else if (repsPerSet.isNotEmpty) {
+        repsPerSet.add(repsPerSet.last);
+      } else {
+        _showError('Please enter valid values for all sets');
+        return null;
+      }
+    }
+    return repsPerSet;
+  }
+
+  List<int>? _buildRestPerSetList() {
+    final restPerSetValues = _perSetRestInputKey.currentState?.values;
+    if (restPerSetValues == null || restPerSetValues.isEmpty) return null;
+
+    final restPerSet = <int>[];
+    for (final value in restPerSetValues) {
+      if (value != null && value > 0) {
+        restPerSet.add(value);
+      } else if (restPerSet.isNotEmpty) {
+        restPerSet.add(restPerSet.last);
+      } else {
+        restPerSet.add(0);
       }
     }
 
-    widget.onSave(result);
+    return restPerSet.every((r) => r == 0) ? null : restPerSet;
+  }
+
+  PlannedExercise? _buildPyramidExercise(String name) {
+    final pyramidTop = int.tryParse(_pyramidTopController.text);
+    if (pyramidTop == null || pyramidTop <= 0) {
+      _showError('Pyramid top must be at least 1');
+      return null;
+    }
+
+    return PlannedExercise(
+      exerciseName: _getExerciseName(name),
+      mode: _mode,
+      pyramidTop: pyramidTop,
+      targetWeight: double.tryParse(_weightController.text) ?? 0,
+      restBetweenSets: _getRestBetweenSets(),
+      restAfterExercise: _getRestAfterExercise(),
+    );
+  }
+
+  PlannedExercise? _buildStaticExercise(String name) {
+    final sets = int.tryParse(_setsController.text);
+    final seconds = int.tryParse(_secondsController.text);
+
+    if (sets == null || sets <= 0) {
+      _showError('Sets must be at least 1');
+      return null;
+    }
+    if (seconds == null || seconds <= 0) {
+      _showError('Seconds must be at least 1');
+      return null;
+    }
+
+    return PlannedExercise(
+      exerciseName: _getExerciseName(name),
+      mode: _mode,
+      targetSets: sets,
+      targetSeconds: seconds,
+      targetWeight: double.tryParse(_weightController.text) ?? 0,
+      restBetweenSets: _getRestBetweenSets(),
+      restAfterExercise: _getRestAfterExercise(),
+    );
+  }
+
+  Future<void> _autoAddExerciseIfNeeded(String name) async {
+    if (!widget.autoAddNewExercises || name.isEmpty) return;
+
+    final existingExercise = await ExerciseStorage.findByName(name);
+    if (existingExercise != null) return;
+
+    final newExercise = Exercise.create(
+      name: name,
+      mode: _mode,
+      defaultSets: int.tryParse(_setsController.text) ?? 4,
+      defaultReps: int.tryParse(_repsController.text) ?? 10,
+      defaultPyramidTop: int.tryParse(_pyramidTopController.text) ?? 10,
+      defaultSeconds: int.tryParse(_secondsController.text) ?? 30,
+      defaultWeight: double.tryParse(_weightController.text) ?? 0,
+    );
+    await ExerciseStorage.addExercise(newExercise);
   }
 
   @override

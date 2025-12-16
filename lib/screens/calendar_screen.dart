@@ -154,6 +154,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final existingCompleted = _getCompletedForDate(workout, date);
 
     if (existingCompleted != null) {
+      // Check if this is an orphaned workout (no template exists)
+      final isOrphaned = _isOrphanedWorkout(workout);
+
+      if (isOrphaned) {
+        // Warn user that uncompleting will delete the workout record
+        final confirm = await _showOrphanedUncompleteWarning(workout);
+        if (confirm != true) return;
+      }
+
       // Uncomplete - delete the completion record
       await CompletedWorkoutStorage.deleteCompleted(existingCompleted.id);
       _loadData();
@@ -186,6 +195,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
         _loadData();
       }
     }
+  }
+
+  Future<bool?> _showOrphanedUncompleteWarning(Workout workout) {
+    return showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Workout Record?'),
+        content: Text(
+          'The workout template "${workout.name}" no longer exists. '
+          'Unmarking this as completed will permanently delete this workout record.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 
   void _previousMonth() {
@@ -350,105 +382,129 @@ class _CalendarScreenState extends State<CalendarScreen> {
             if (dayOffset < 0 || dayOffset >= daysInMonth) {
               return const SizedBox();
             }
-
-            final date = DateTime(_focusedMonth.year, _focusedMonth.month, dayOffset + 1);
-            final workouts = _getWorkoutsForDate(date);
-            final hasCompleted = _hasAnyCompletedForDate(date);
-            final allCompleted = workouts.isNotEmpty &&
-                workouts.every((w) => _isCompletedForDate(w, date));
-            final isSelected = _selectedDate != null &&
-                date.year == _selectedDate!.year &&
-                date.month == _selectedDate!.month &&
-                date.day == _selectedDate!.day;
-            final isToday = date.year == DateTime.now().year &&
-                date.month == DateTime.now().month &&
-                date.day == DateTime.now().day;
-
-            return GestureDetector(
-              onTap: () => _selectDate(date),
-              child: Container(
-                margin: const EdgeInsets.all(2),
-                decoration: BoxDecoration(
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.primary
-                      : allCompleted
-                          ? Colors.green.withValues(alpha: 0.2)
-                          : isToday
-                              ? Theme.of(context).colorScheme.primaryContainer
-                              : workouts.isNotEmpty
-                                  ? Theme.of(context).colorScheme.surfaceContainerHighest
-                                  : null,
-                  borderRadius: BorderRadius.circular(8),
-                  border: workouts.isNotEmpty
-                      ? Border.all(
-                          color: isSelected
-                              ? Colors.white
-                              : allCompleted
-                                  ? Colors.green
-                                  : Theme.of(context).colorScheme.primary,
-                          width: 1.5,
-                        )
-                      : null,
-                ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '${dayOffset + 1}',
-                      style: TextStyle(
-                        color: isSelected ? Colors.white : null,
-                        fontWeight: isToday ? FontWeight.bold : null,
-                        fontSize: 12,
-                      ),
-                    ),
-                    if (workouts.isNotEmpty)
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (allCompleted)
-                            Icon(
-                              Icons.check,
-                              size: 12,
-                              color: isSelected ? Colors.white : Colors.green,
-                            )
-                          else ...[
-                            ...workouts.take(2).map((w) {
-                              final isWorkoutCompleted = _isCompletedForDate(w, date);
-                              return Icon(
-                                isWorkoutCompleted ? Icons.check_circle : w.icon,
-                                size: 12,
-                                color: isSelected
-                                    ? Colors.white
-                                    : isWorkoutCompleted
-                                        ? Colors.green
-                                        : Theme.of(context).colorScheme.primary,
-                              );
-                            }),
-                            if (workouts.length > 2)
-                              Text(
-                                '+${workouts.length - 2}',
-                                style: TextStyle(
-                                  fontSize: 8,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : hasCompleted
-                                          ? Colors.green
-                                          : Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
-                          ],
-                        ],
-                      ),
-                  ],
-                ),
-              ),
-            );
+            return _buildCalendarDayCell(dayOffset);
           },
         ),
       ],
     );
+  }
+
+  Widget _buildCalendarDayCell(int dayOffset) {
+    final date = DateTime(_focusedMonth.year, _focusedMonth.month, dayOffset + 1);
+    final workouts = _getWorkoutsForDate(date);
+    final hasCompleted = _hasAnyCompletedForDate(date);
+    final allCompleted = workouts.isNotEmpty &&
+        workouts.every((w) => _isCompletedForDate(w, date));
+    final isSelected = _selectedDate != null &&
+        date.year == _selectedDate!.year &&
+        date.month == _selectedDate!.month &&
+        date.day == _selectedDate!.day;
+    final isToday = date.year == DateTime.now().year &&
+        date.month == DateTime.now().month &&
+        date.day == DateTime.now().day;
+
+    return GestureDetector(
+      onTap: () => _selectDate(date),
+      child: Container(
+        margin: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          color: _getDayCellColor(isSelected, allCompleted, isToday, workouts.isNotEmpty),
+          borderRadius: BorderRadius.circular(8),
+          border: _getDayCellBorder(isSelected, allCompleted, workouts.isNotEmpty),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '${dayOffset + 1}',
+              style: TextStyle(
+                color: isSelected ? Colors.white : null,
+                fontWeight: isToday ? FontWeight.bold : null,
+                fontSize: 12,
+              ),
+            ),
+            if (workouts.isNotEmpty)
+              _buildDayCellWorkoutIcons(
+                workouts: workouts,
+                date: date,
+                isSelected: isSelected,
+                allCompleted: allCompleted,
+                hasCompleted: hasCompleted,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color? _getDayCellColor(bool isSelected, bool allCompleted, bool isToday, bool hasWorkouts) {
+    if (isSelected) return Theme.of(context).colorScheme.primary;
+    if (allCompleted) return Colors.green.withValues(alpha: 0.2);
+    if (isToday) return Theme.of(context).colorScheme.primaryContainer;
+    if (hasWorkouts) return Theme.of(context).colorScheme.surfaceContainerHighest;
+    return null;
+  }
+
+  Border? _getDayCellBorder(bool isSelected, bool allCompleted, bool hasWorkouts) {
+    if (!hasWorkouts) return null;
+
+    Color borderColor;
+    if (isSelected) {
+      borderColor = Colors.white;
+    } else if (allCompleted) {
+      borderColor = Colors.green;
+    } else {
+      borderColor = Theme.of(context).colorScheme.primary;
+    }
+    return Border.all(color: borderColor, width: 1.5);
+  }
+
+  Widget _buildDayCellWorkoutIcons({
+    required List<Workout> workouts,
+    required DateTime date,
+    required bool isSelected,
+    required bool allCompleted,
+    required bool hasCompleted,
+  }) {
+    if (allCompleted) {
+      return Icon(
+        Icons.check,
+        size: 12,
+        color: isSelected ? Colors.white : Colors.green,
+      );
+    }
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ...workouts.take(2).map((w) => _buildWorkoutIcon(w, date, isSelected)),
+        if (workouts.length > 2)
+          Text(
+            '+${workouts.length - 2}',
+            style: TextStyle(
+              fontSize: 8,
+              color: _getWorkoutIconColor(isSelected, hasCompleted),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildWorkoutIcon(Workout workout, DateTime date, bool isSelected) {
+    final isWorkoutCompleted = _isCompletedForDate(workout, date);
+    return Icon(
+      isWorkoutCompleted ? Icons.check_circle : workout.icon,
+      size: 12,
+      color: _getWorkoutIconColor(isSelected, isWorkoutCompleted),
+    );
+  }
+
+  Color _getWorkoutIconColor(bool isSelected, bool isCompleted) {
+    if (isSelected) return Colors.white;
+    if (isCompleted) return Colors.green;
+    return Theme.of(context).colorScheme.primary;
   }
 
   Widget _buildSelectedDayWorkouts() {
@@ -497,20 +553,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final isCompleted = _isCompletedForDate(workout, _selectedDate!);
     final completed = _getCompletedForDate(workout, _selectedDate!);
     final isOrphaned = _isOrphanedWorkout(workout);
-
-    String recurrenceText;
-    if (isOrphaned) {
-      recurrenceText = 'Completed';
-    } else {
-      switch (workout.recurrenceType) {
-        case RecurrenceType.oneOff:
-          recurrenceText = 'One-time';
-        case RecurrenceType.weekly:
-          recurrenceText = 'Weekly';
-        case RecurrenceType.offset:
-          recurrenceText = 'Every ${workout.offsetDays} days';
-      }
-    }
+    final recurrenceText = _getRecurrenceText(workout, isOrphaned);
+    final exercises = isCompleted ? completed!.exercises : workout.exercises;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
@@ -518,7 +562,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
           : null,
       child: InkWell(
-        // For orphaned workouts, open the completion dialog; otherwise edit the template
         onTap: isOrphaned
             ? () => _openCompleteDialog(workout, _selectedDate!)
             : () => _editWorkout(workout),
@@ -528,116 +571,145 @@ class _CalendarScreenState extends State<CalendarScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  // Completion checkbox
-                  GestureDetector(
-                    onTap: () => _toggleCompletion(workout, _selectedDate!),
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: isCompleted
-                            ? Colors.green
-                            : Theme.of(context).colorScheme.surfaceContainerHighest,
-                        border: isCompleted
-                            ? null
-                            : Border.all(
-                                color: Theme.of(context).colorScheme.outline,
-                                width: 2,
-                              ),
-                      ),
-                      child: isCompleted
-                          ? const Icon(Icons.check, color: Colors.white, size: 20)
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Container(
-                    width: 40,
-                    height: 40,
-                    decoration: BoxDecoration(
-                      color: isCompleted
-                          ? Colors.green.withValues(alpha: 0.2)
-                          : Theme.of(context).colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(
-                      workout.icon,
-                      color: isCompleted
-                          ? Colors.green
-                          : Theme.of(context).colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      workout.name,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        decoration: isCompleted ? TextDecoration.lineThrough : null,
-                        color: isCompleted ? Colors.grey[600] : null,
-                      ),
-                    ),
-                  ),
-                  Chip(
-                    label: Text(recurrenceText),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  // Edit button for completed, X button for pending
-                  if (isCompleted)
-                    IconButton(
-                      icon: const Icon(Icons.edit),
-                      onPressed: () => _openCompleteDialog(workout, _selectedDate!),
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Edit completed workout',
-                    )
-                  else
-                    IconButton(
-                      icon: const Icon(Icons.close, color: Colors.red),
-                      onPressed: () => _removeFromCalendar(workout),
-                      visualDensity: VisualDensity.compact,
-                      tooltip: 'Remove from calendar',
-                    ),
-                ],
-              ),
+              _buildWorkoutCardHeader(workout, isCompleted, recurrenceText),
               const SizedBox(height: 8),
-              Text(
-                '${isCompleted ? completed!.exercises.length : workout.exercises.length} exercise${(isCompleted ? completed!.exercises.length : workout.exercises.length) != 1 ? 's' : ''}',
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-              if (workout.exercises.isNotEmpty)
-                Text(
-                  (isCompleted ? completed!.exercises : workout.exercises)
-                      .map((e) => e.exerciseName)
-                      .join(', '),
-                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+              _buildExerciseCountText(exercises.length),
+              if (exercises.isNotEmpty)
+                _buildExerciseNamesText(exercises),
               if (isCompleted)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.check_circle, color: Colors.green, size: 16),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Completed',
-                        style: TextStyle(
-                          color: Colors.green[700],
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                _buildCompletedBadge(),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  String _getRecurrenceText(Workout workout, bool isOrphaned) {
+    if (isOrphaned) return 'Completed';
+    return switch (workout.recurrenceType) {
+      RecurrenceType.oneOff => 'One-time',
+      RecurrenceType.weekly => 'Weekly',
+      RecurrenceType.offset => 'Every ${workout.offsetDays} days',
+    };
+  }
+
+  Widget _buildWorkoutCardHeader(Workout workout, bool isCompleted, String recurrenceText) {
+    return Row(
+      children: [
+        _buildCompletionCheckbox(workout, isCompleted),
+        const SizedBox(width: 12),
+        _buildWorkoutIconBox(workout, isCompleted),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            workout.name,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              decoration: isCompleted ? TextDecoration.lineThrough : null,
+              color: isCompleted ? Colors.grey[600] : null,
+            ),
+          ),
+        ),
+        Chip(
+          label: Text(recurrenceText),
+          visualDensity: VisualDensity.compact,
+        ),
+        _buildCardActionButton(workout, isCompleted),
+      ],
+    );
+  }
+
+  Widget _buildCompletionCheckbox(Workout workout, bool isCompleted) {
+    return GestureDetector(
+      onTap: () => _toggleCompletion(workout, _selectedDate!),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: isCompleted
+              ? Colors.green
+              : Theme.of(context).colorScheme.surfaceContainerHighest,
+          border: isCompleted
+              ? null
+              : Border.all(color: Theme.of(context).colorScheme.outline, width: 2),
+        ),
+        child: isCompleted
+            ? const Icon(Icons.check, color: Colors.white, size: 20)
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildWorkoutIconBox(Workout workout, bool isCompleted) {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: isCompleted
+            ? Colors.green.withValues(alpha: 0.2)
+            : Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        workout.icon,
+        color: isCompleted ? Colors.green : Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+
+  Widget _buildCardActionButton(Workout workout, bool isCompleted) {
+    if (isCompleted) {
+      return IconButton(
+        icon: const Icon(Icons.edit),
+        onPressed: () => _openCompleteDialog(workout, _selectedDate!),
+        visualDensity: VisualDensity.compact,
+        tooltip: 'Edit completed workout',
+      );
+    }
+    return IconButton(
+      icon: const Icon(Icons.close, color: Colors.red),
+      onPressed: () => _removeFromCalendar(workout),
+      visualDensity: VisualDensity.compact,
+      tooltip: 'Remove from calendar',
+    );
+  }
+
+  Widget _buildExerciseCountText(int count) {
+    final plural = count != 1 ? 's' : '';
+    return Text(
+      '$count exercise$plural',
+      style: TextStyle(color: Colors.grey[600]),
+    );
+  }
+
+  Widget _buildExerciseNamesText(List<PlannedExercise> exercises) {
+    return Text(
+      exercises.map((e) => e.exerciseName).join(', '),
+      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildCompletedBadge() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Row(
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 16),
+          const SizedBox(width: 4),
+          Text(
+            'Completed',
+            style: TextStyle(
+              color: Colors.green[700],
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
       ),
     );
   }

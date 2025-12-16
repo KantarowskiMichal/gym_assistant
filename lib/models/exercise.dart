@@ -19,6 +19,7 @@ class Exercise {
   final double defaultWeight;
   final int? defaultRestBetweenSets;        // Rest in seconds (for reps, pyramid, static)
   final List<int>? defaultRestBetweenSetsPerSet; // Rest per set in seconds (for variableSets)
+  final int? defaultRestAfterExercise;      // Rest after completing this exercise
 
   const Exercise({
     required this.id,
@@ -32,6 +33,7 @@ class Exercise {
     this.defaultWeight = 0,
     this.defaultRestBetweenSets,
     this.defaultRestBetweenSetsPerSet,
+    this.defaultRestAfterExercise,
   });
 
   /// Hardcoded default exercises
@@ -61,6 +63,7 @@ class Exercise {
     double defaultWeight = 0,
     int? defaultRestBetweenSets,
     List<int>? defaultRestBetweenSetsPerSet,
+    int? defaultRestAfterExercise,
   }) {
     return Exercise(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -74,6 +77,7 @@ class Exercise {
       defaultWeight: defaultWeight,
       defaultRestBetweenSets: defaultRestBetweenSets,
       defaultRestBetweenSetsPerSet: defaultRestBetweenSetsPerSet,
+      defaultRestAfterExercise: defaultRestAfterExercise,
     );
   }
 
@@ -89,6 +93,7 @@ class Exercise {
     'defaultWeight': defaultWeight,
     'defaultRestBetweenSets': defaultRestBetweenSets,
     'defaultRestBetweenSetsPerSet': defaultRestBetweenSetsPerSet,
+    'defaultRestAfterExercise': defaultRestAfterExercise,
   };
 
   factory Exercise.fromJson(Map<String, dynamic> json) {
@@ -108,6 +113,7 @@ class Exercise {
       defaultRestBetweenSetsPerSet: (json['defaultRestBetweenSetsPerSet'] as List<dynamic>?)
           ?.map((e) => e as int)
           .toList(),
+      defaultRestAfterExercise: json['defaultRestAfterExercise'] as int?,
     );
   }
 
@@ -122,6 +128,7 @@ class Exercise {
     double? defaultWeight,
     int? defaultRestBetweenSets,
     List<int>? defaultRestBetweenSetsPerSet,
+    int? defaultRestAfterExercise,
   }) {
     return Exercise(
       id: id,
@@ -135,6 +142,7 @@ class Exercise {
       defaultWeight: defaultWeight ?? this.defaultWeight,
       defaultRestBetweenSets: defaultRestBetweenSets ?? this.defaultRestBetweenSets,
       defaultRestBetweenSetsPerSet: defaultRestBetweenSetsPerSet ?? this.defaultRestBetweenSetsPerSet,
+      defaultRestAfterExercise: defaultRestAfterExercise ?? this.defaultRestAfterExercise,
     );
   }
 

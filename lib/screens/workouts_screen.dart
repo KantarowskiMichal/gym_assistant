@@ -229,49 +229,12 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
   void _showIconPicker() {
     showModalBottomSheet(
       context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Choose Icon',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: WorkoutIcons.available.map((icon) {
-                final isSelected = icon.codePoint == _selectedIcon.codePoint;
-                return GestureDetector(
-                  onTap: () {
-                    setState(() => _selectedIcon = icon);
-                    Navigator.pop(context);
-                  },
-                  child: Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(
-                      icon,
-                      color: isSelected
-                          ? Colors.white
-                          : Theme.of(context).colorScheme.onSurface,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
+      builder: (context) => _IconPickerSheet(
+        selectedIcon: _selectedIcon,
+        onIconSelected: (icon) {
+          setState(() => _selectedIcon = icon);
+          Navigator.pop(context);
+        },
       ),
     );
   }
@@ -459,6 +422,81 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _IconPickerSheet extends StatelessWidget {
+  final IconData selectedIcon;
+  final ValueChanged<IconData> onIconSelected;
+
+  const _IconPickerSheet({
+    required this.selectedIcon,
+    required this.onIconSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Choose Icon',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: WorkoutIcons.available
+                .map((icon) => _IconOption(
+                      icon: icon,
+                      isSelected: icon.codePoint == selectedIcon.codePoint,
+                      onTap: () => onIconSelected(icon),
+                    ))
+                .toList(),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+}
+
+class _IconOption extends StatelessWidget {
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _IconOption({
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primary
+              : Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          icon,
+          color: isSelected
+              ? Colors.white
+              : Theme.of(context).colorScheme.onSurface,
+        ),
       ),
     );
   }
