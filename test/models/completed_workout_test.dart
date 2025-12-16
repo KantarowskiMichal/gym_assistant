@@ -16,17 +16,15 @@ void main() {
         exercises: [
           PlannedExercise(
             exerciseName: 'Push Ups',
-            exerciseType: ExerciseType.dynamic,
+            mode: ExerciseMode.reps,
             targetSets: 4,
-            targetRepsOrDuration: 10,
-            targetWeight: 0,
+            targetReps: 10,
           ),
           PlannedExercise(
             exerciseName: 'Plank',
-            exerciseType: ExerciseType.static,
+            mode: ExerciseMode.static,
             targetSets: 3,
-            targetRepsOrDuration: 60,
-            targetWeight: 0,
+            targetSeconds: 60,
           ),
         ],
         startDate: DateTime(2025, 1, 15),
@@ -88,9 +86,9 @@ void main() {
       final modifiedExercises = [
         PlannedExercise(
           exerciseName: 'Modified Exercise',
-          exerciseType: ExerciseType.dynamic,
+          mode: ExerciseMode.reps,
           targetSets: 5,
-          targetRepsOrDuration: 15,
+          targetReps: 15,
           targetWeight: 20.0,
         ),
       ];
@@ -143,10 +141,9 @@ void main() {
         exercises: [
           PlannedExercise(
             exerciseName: 'Push Ups',
-            exerciseType: ExerciseType.dynamic,
+            mode: ExerciseMode.reps,
             targetSets: 4,
-            targetRepsOrDuration: 10,
-            targetWeight: 0,
+            targetReps: 10,
           ),
         ],
         scheduledDate: DateTime(2025, 1, 15),
@@ -158,10 +155,9 @@ void main() {
       final newExercises = [
         PlannedExercise(
           exerciseName: 'New Exercise',
-          exerciseType: ExerciseType.static,
+          mode: ExerciseMode.static,
           targetSets: 3,
-          targetRepsOrDuration: 45,
-          targetWeight: 0,
+          targetSeconds: 45,
         ),
       ];
 
@@ -176,10 +172,9 @@ void main() {
       final newExercises = [
         PlannedExercise(
           exerciseName: 'New Exercise',
-          exerciseType: ExerciseType.dynamic,
+          mode: ExerciseMode.reps,
           targetSets: 4,
-          targetRepsOrDuration: 10,
-          targetWeight: 0,
+          targetReps: 10,
         ),
       ];
 
@@ -206,9 +201,9 @@ void main() {
       final newExercises = [
         PlannedExercise(
           exerciseName: 'Updated Exercise',
-          exerciseType: ExerciseType.dynamic,
+          mode: ExerciseMode.reps,
           targetSets: 5,
-          targetRepsOrDuration: 12,
+          targetReps: 12,
           targetWeight: 15.0,
         ),
       ];
@@ -235,10 +230,9 @@ void main() {
         exercises: [
           PlannedExercise(
             exerciseName: 'Swimming',
-            exerciseType: ExerciseType.dynamic,
+            mode: ExerciseMode.reps,
             targetSets: 10,
-            targetRepsOrDuration: 100,
-            targetWeight: 0,
+            targetReps: 100,
           ),
         ],
         scheduledDate: DateTime(2025, 1, 20),
@@ -266,9 +260,9 @@ void main() {
         'exercises': [
           {
             'exerciseName': 'Running',
-            'exerciseType': 'dynamic',
+            'mode': 'reps',
             'targetSets': 1,
-            'targetRepsOrDuration': 30,
+            'targetReps': 30,
             'targetWeight': 0,
           },
         ],
@@ -297,17 +291,16 @@ void main() {
         exercises: [
           PlannedExercise(
             exerciseName: 'Exercise 1',
-            exerciseType: ExerciseType.dynamic,
+            mode: ExerciseMode.reps,
             targetSets: 4,
-            targetRepsOrDuration: 10,
+            targetReps: 10,
             targetWeight: 25.5,
           ),
           PlannedExercise(
             exerciseName: 'Exercise 2',
-            exerciseType: ExerciseType.static,
+            mode: ExerciseMode.static,
             targetSets: 3,
-            targetRepsOrDuration: 45,
-            targetWeight: 0,
+            targetSeconds: 45,
           ),
         ],
         scheduledDate: DateTime(2025, 3, 15),
@@ -354,23 +347,22 @@ void main() {
       final exercises = [
         PlannedExercise(
           exerciseName: 'Pull Ups',
-          exerciseType: ExerciseType.dynamic,
+          mode: ExerciseMode.reps,
           targetSets: 4,
-          targetRepsOrDuration: 8,
+          targetReps: 8,
           targetWeight: 10.0,
         ),
         PlannedExercise(
           exerciseName: 'Dead Hang',
-          exerciseType: ExerciseType.static,
+          mode: ExerciseMode.static,
           targetSets: 3,
-          targetRepsOrDuration: 30,
-          targetWeight: 0,
+          targetSeconds: 30,
         ),
         PlannedExercise(
           exerciseName: 'Chin Ups',
-          exerciseType: ExerciseType.dynamic,
+          mode: ExerciseMode.reps,
           targetSets: 3,
-          targetRepsOrDuration: 6,
+          targetReps: 6,
           targetWeight: 5.0,
         ),
       ];
@@ -392,9 +384,8 @@ void main() {
 
       for (var i = 0; i < exercises.length; i++) {
         expect(restored.exercises[i].exerciseName, equals(exercises[i].exerciseName));
-        expect(restored.exercises[i].exerciseType, equals(exercises[i].exerciseType));
+        expect(restored.exercises[i].mode, equals(exercises[i].mode));
         expect(restored.exercises[i].targetSets, equals(exercises[i].targetSets));
-        expect(restored.exercises[i].targetRepsOrDuration, equals(exercises[i].targetRepsOrDuration));
         expect(restored.exercises[i].targetWeight, equals(exercises[i].targetWeight));
       }
     });
@@ -402,18 +393,16 @@ void main() {
 
   group('CompletedWorkout preserves data independently', () {
     test('workoutName is stored even after source could be deleted', () {
-      // This test documents that CompletedWorkout stores its own copy of the name
       final completed = CompletedWorkout(
         id: 'preserved_id',
-        scheduledWorkoutId: 'deleted_workout_id', // This ID might not exist anymore
-        workoutName: 'Preserved Workout Name', // But the name is preserved
+        scheduledWorkoutId: 'deleted_workout_id',
+        workoutName: 'Preserved Workout Name',
         iconCodePoint: Icons.favorite.codePoint,
         exercises: [],
         scheduledDate: DateTime(2025, 1, 15),
         completedAt: DateTime(2025, 1, 15, 10, 0),
       );
 
-      // The completed workout retains its data independently
       expect(completed.workoutName, equals('Preserved Workout Name'));
       expect(completed.iconCodePoint, equals(Icons.favorite.codePoint));
     });
@@ -422,10 +411,9 @@ void main() {
       final sourceExercises = [
         PlannedExercise(
           exerciseName: 'Original',
-          exerciseType: ExerciseType.dynamic,
+          mode: ExerciseMode.reps,
           targetSets: 4,
-          targetRepsOrDuration: 10,
-          targetWeight: 0,
+          targetReps: 10,
         ),
       ];
 
@@ -443,7 +431,6 @@ void main() {
         DateTime(2025, 1, 15),
       );
 
-      // The completed workout has its own copy of exercises
       expect(completed.exercises.length, equals(1));
       expect(completed.exercises[0].exerciseName, equals('Original'));
     });

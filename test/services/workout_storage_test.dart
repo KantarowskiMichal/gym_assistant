@@ -476,9 +476,9 @@ void main() {
         exercises: [
           PlannedExercise(
             exerciseName: 'New Exercise',
-            exerciseType: ExerciseType.dynamic,
+            mode: ExerciseMode.reps,
             targetSets: 4,
-            targetRepsOrDuration: 10,
+            targetReps: 10,
           ),
         ],
         startDate: DateTime(2025, 1, 15),
@@ -550,9 +550,9 @@ void main() {
         exercises: [
           PlannedExercise(
             exerciseName: 'Running',
-            exerciseType: ExerciseType.dynamic,
+            mode: ExerciseMode.reps,
             targetSets: 1,
-            targetRepsOrDuration: 30,
+            targetReps: 30,
           ),
         ],
         startDate: DateTime(2025, 1, 15),

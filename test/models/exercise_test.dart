@@ -6,39 +6,46 @@ void main() {
     test('creates with timestamp-based ID', () {
       final exercise = Exercise.create(
         name: 'Test Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       expect(exercise.id, isNotEmpty);
-      // ID should be parseable as a timestamp
       expect(int.tryParse(exercise.id), isNotNull);
-      // ID should be a reasonable timestamp (after year 2020)
       final timestamp = int.parse(exercise.id);
       expect(timestamp, greaterThan(1577836800000)); // Jan 1, 2020
     });
 
-    test('dynamic type sets defaultRepsOrDuration to 10', () {
+    test('reps mode sets defaultReps to 10', () {
       final exercise = Exercise.create(
-        name: 'Dynamic Exercise',
-        type: ExerciseType.dynamic,
+        name: 'Reps Exercise',
+        mode: ExerciseMode.reps,
       );
 
-      expect(exercise.defaultRepsOrDuration, equals(10));
+      expect(exercise.defaultReps, equals(10));
     });
 
-    test('static type sets defaultRepsOrDuration to 30', () {
+    test('static mode sets defaultSeconds to 30', () {
       final exercise = Exercise.create(
         name: 'Static Exercise',
-        type: ExerciseType.static,
+        mode: ExerciseMode.static,
       );
 
-      expect(exercise.defaultRepsOrDuration, equals(30));
+      expect(exercise.defaultSeconds, equals(30));
+    });
+
+    test('pyramid mode sets defaultPyramidTop to 10', () {
+      final exercise = Exercise.create(
+        name: 'Pyramid Exercise',
+        mode: ExerciseMode.pyramid,
+      );
+
+      expect(exercise.defaultPyramidTop, equals(10));
     });
 
     test('default sets is 4', () {
       final exercise = Exercise.create(
         name: 'Test Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       expect(exercise.defaultSets, equals(4));
@@ -47,7 +54,7 @@ void main() {
     test('default weight is 0', () {
       final exercise = Exercise.create(
         name: 'Test Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       expect(exercise.defaultWeight, equals(0));
@@ -56,14 +63,14 @@ void main() {
     test('can override default values', () {
       final exercise = Exercise.create(
         name: 'Custom Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         defaultSets: 5,
-        defaultRepsOrDuration: 15,
+        defaultReps: 15,
         defaultWeight: 20.5,
       );
 
       expect(exercise.defaultSets, equals(5));
-      expect(exercise.defaultRepsOrDuration, equals(15));
+      expect(exercise.defaultReps, equals(15));
       expect(exercise.defaultWeight, equals(20.5));
     });
   });
@@ -73,7 +80,7 @@ void main() {
       final customExercise = Exercise(
         id: '1234567890',
         name: 'Custom Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       expect(customExercise.isCustom, isTrue);
@@ -83,7 +90,7 @@ void main() {
       final defaultExercise = Exercise(
         id: 'default_test',
         name: 'Default Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       expect(defaultExercise.isCustom, isFalse);
@@ -92,7 +99,7 @@ void main() {
     test('Exercise.create() creates custom exercises', () {
       final exercise = Exercise.create(
         name: 'Created Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       expect(exercise.isCustom, isTrue);
@@ -104,9 +111,9 @@ void main() {
       final exercise = Exercise(
         id: 'test_id',
         name: 'Test Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         defaultSets: 3,
-        defaultRepsOrDuration: 12,
+        defaultReps: 12,
         defaultWeight: 15.5,
       );
 
@@ -114,9 +121,9 @@ void main() {
 
       expect(json['id'], equals('test_id'));
       expect(json['name'], equals('Test Exercise'));
-      expect(json['type'], equals('dynamic'));
+      expect(json['mode'], equals('reps'));
       expect(json['defaultSets'], equals(3));
-      expect(json['defaultRepsOrDuration'], equals(12));
+      expect(json['defaultReps'], equals(12));
       expect(json['defaultWeight'], equals(15.5));
     });
 
@@ -124,9 +131,9 @@ void main() {
       final json = {
         'id': 'test_id',
         'name': 'Test Exercise',
-        'type': 'static',
+        'mode': 'static',
         'defaultSets': 5,
-        'defaultRepsOrDuration': 45,
+        'defaultSeconds': 45,
         'defaultWeight': 10.0,
       };
 
@@ -134,9 +141,9 @@ void main() {
 
       expect(exercise.id, equals('test_id'));
       expect(exercise.name, equals('Test Exercise'));
-      expect(exercise.type, equals(ExerciseType.static));
+      expect(exercise.mode, equals(ExerciseMode.static));
       expect(exercise.defaultSets, equals(5));
-      expect(exercise.defaultRepsOrDuration, equals(45));
+      expect(exercise.defaultSeconds, equals(45));
       expect(exercise.defaultWeight, equals(10.0));
     });
 
@@ -144,9 +151,9 @@ void main() {
       final original = Exercise(
         id: 'roundtrip_test',
         name: 'Roundtrip Exercise',
-        type: ExerciseType.static,
+        mode: ExerciseMode.static,
         defaultSets: 6,
-        defaultRepsOrDuration: 60,
+        defaultSeconds: 60,
         defaultWeight: 25.5,
       );
 
@@ -155,9 +162,9 @@ void main() {
 
       expect(restored.id, equals(original.id));
       expect(restored.name, equals(original.name));
-      expect(restored.type, equals(original.type));
+      expect(restored.mode, equals(original.mode));
       expect(restored.defaultSets, equals(original.defaultSets));
-      expect(restored.defaultRepsOrDuration, equals(original.defaultRepsOrDuration));
+      expect(restored.defaultSeconds, equals(original.defaultSeconds));
       expect(restored.defaultWeight, equals(original.defaultWeight));
     });
 
@@ -165,13 +172,13 @@ void main() {
       final json = {
         'id': 'minimal_id',
         'name': 'Minimal Exercise',
-        'type': 'dynamic',
+        'mode': 'reps',
       };
 
       final exercise = Exercise.fromJson(json);
 
       expect(exercise.defaultSets, equals(4));
-      expect(exercise.defaultRepsOrDuration, equals(10));
+      expect(exercise.defaultReps, equals(10));
       expect(exercise.defaultWeight, equals(0));
     });
   });
@@ -181,7 +188,7 @@ void main() {
       final original = Exercise(
         id: 'original_id',
         name: 'Original',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       final copy = original.copyWith(name: 'Modified');
@@ -193,9 +200,9 @@ void main() {
       final original = Exercise(
         id: 'test_id',
         name: 'Original',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         defaultSets: 4,
-        defaultRepsOrDuration: 10,
+        defaultReps: 10,
         defaultWeight: 0,
       );
 
@@ -208,31 +215,50 @@ void main() {
       expect(copy.name, equals('Updated'));
       expect(copy.defaultSets, equals(5));
       expect(copy.defaultWeight, equals(20.0));
-      // Unchanged fields preserved
-      expect(copy.type, equals(ExerciseType.dynamic));
-      expect(copy.defaultRepsOrDuration, equals(10));
+      expect(copy.mode, equals(ExerciseMode.reps));
+      expect(copy.defaultReps, equals(10));
     });
   });
 
-  group('Exercise.repsOrDurationLabel', () {
-    test('returns "reps" for dynamic type', () {
+  group('Exercise.modeLabel', () {
+    test('returns "Reps" for reps mode', () {
       final exercise = Exercise(
         id: 'test',
-        name: 'Dynamic',
-        type: ExerciseType.dynamic,
+        name: 'Reps',
+        mode: ExerciseMode.reps,
       );
 
-      expect(exercise.repsOrDurationLabel, equals('reps'));
+      expect(exercise.modeLabel, equals('Reps'));
     });
 
-    test('returns "seconds" for static type', () {
+    test('returns "Static" for static mode', () {
       final exercise = Exercise(
         id: 'test',
         name: 'Static',
-        type: ExerciseType.static,
+        mode: ExerciseMode.static,
       );
 
-      expect(exercise.repsOrDurationLabel, equals('seconds'));
+      expect(exercise.modeLabel, equals('Static'));
+    });
+
+    test('returns "Pyramid" for pyramid mode', () {
+      final exercise = Exercise(
+        id: 'test',
+        name: 'Pyramid',
+        mode: ExerciseMode.pyramid,
+      );
+
+      expect(exercise.modeLabel, equals('Pyramid'));
+    });
+
+    test('returns "Variable" for variableSets mode', () {
+      final exercise = Exercise(
+        id: 'test',
+        name: 'Variable',
+        mode: ExerciseMode.variableSets,
+      );
+
+      expect(exercise.modeLabel, equals('Variable'));
     });
   });
 
@@ -241,22 +267,22 @@ void main() {
       expect(Exercise.defaults.length, equals(10));
     });
 
-    test('contains all dynamic exercises', () {
-      final dynamicNames = ['Pull Ups', 'Push Ups', 'Dips', 'Leg Press', 'Bench Press', 'Dead Lift'];
+    test('contains all reps mode exercises', () {
+      final repsNames = ['Pull Ups', 'Push Ups', 'Dips', 'Leg Press', 'Bench Press', 'Dead Lift'];
 
-      for (final name in dynamicNames) {
+      for (final name in repsNames) {
         final exercise = Exercise.defaults.firstWhere(
           (e) => e.name == name,
           orElse: () => throw Exception('$name not found'),
         );
-        expect(exercise.type, equals(ExerciseType.dynamic),
-            reason: '$name should be dynamic');
-        expect(exercise.defaultRepsOrDuration, equals(10),
+        expect(exercise.mode, equals(ExerciseMode.reps),
+            reason: '$name should be reps mode');
+        expect(exercise.defaultReps, equals(10),
             reason: '$name should have 10 reps');
       }
     });
 
-    test('contains all static exercises', () {
+    test('contains all static mode exercises', () {
       final staticNames = ['Planche', 'Dead Hang', 'Front Lever', 'Back Lever'];
 
       for (final name in staticNames) {
@@ -264,9 +290,9 @@ void main() {
           (e) => e.name == name,
           orElse: () => throw Exception('$name not found'),
         );
-        expect(exercise.type, equals(ExerciseType.static),
-            reason: '$name should be static');
-        expect(exercise.defaultRepsOrDuration, equals(30),
+        expect(exercise.mode, equals(ExerciseMode.static),
+            reason: '$name should be static mode');
+        expect(exercise.defaultSeconds, equals(30),
             reason: '$name should have 30 seconds');
       }
     });
@@ -285,6 +311,54 @@ void main() {
         expect(exercise.isCustom, isFalse,
             reason: '${exercise.name} should not be custom');
       }
+    });
+  });
+
+  group('Exercise.defaultsSummary', () {
+    test('reps mode shows sets x reps', () {
+      final exercise = Exercise(
+        id: 'test',
+        name: 'Test',
+        mode: ExerciseMode.reps,
+        defaultSets: 4,
+        defaultReps: 10,
+      );
+
+      expect(exercise.defaultsSummary, equals('4 × 10 reps'));
+    });
+
+    test('static mode shows sets x seconds', () {
+      final exercise = Exercise(
+        id: 'test',
+        name: 'Test',
+        mode: ExerciseMode.static,
+        defaultSets: 3,
+        defaultSeconds: 30,
+      );
+
+      expect(exercise.defaultsSummary, equals('3 × 30s'));
+    });
+
+    test('pyramid mode shows pyramid to top', () {
+      final exercise = Exercise(
+        id: 'test',
+        name: 'Test',
+        mode: ExerciseMode.pyramid,
+        defaultPyramidTop: 10,
+      );
+
+      expect(exercise.defaultsSummary, equals('Pyramid to 10'));
+    });
+
+    test('variableSets mode shows sets (variable)', () {
+      final exercise = Exercise(
+        id: 'test',
+        name: 'Test',
+        mode: ExerciseMode.variableSets,
+        defaultSets: 4,
+      );
+
+      expect(exercise.defaultsSummary, equals('4 sets (variable)'));
     });
   });
 }

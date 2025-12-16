@@ -14,13 +14,26 @@ A workout planning app with four main screens: Exercises, Workouts, Today, and C
 |-------|------|-------------|
 | id | String | Unique identifier |
 | name | String | Exercise name (unique, case-insensitive) |
-| type | Enum | `dynamic` (reps) or `static` (duration) |
-| defaultSets | int | Default sets (default: 4) |
-| defaultRepsOrDuration | int | Default reps (10) or seconds (30) |
+| mode | ExerciseMode | `reps`, `variableSets`, `pyramid`, or `static` |
+| defaultSets | int | Default sets (default: 4) - for reps, variableSets, static |
+| defaultReps | int | Default reps (default: 10) - for reps mode |
+| defaultPyramidTop | int | Pyramid top value (default: 10) - for pyramid mode |
+| defaultSeconds | int | Default seconds (default: 30) - for static mode |
 | defaultWeight | double | Default weight in kg (default: 0) |
 
+**Exercise Modes:**
+
+| Mode | Description | UI Fields | Display Format |
+|------|-------------|-----------|----------------|
+| `reps` | Standard rep-based | Sets, Reps, Weight | "4 × 10 reps" |
+| `variableSets` | Per-set reps control | Sets, Reps per set (N fields), Weight | "4 sets (10, 10, 8, 8)" |
+| `pyramid` | Pyramid pattern (1,2,3...top...3,2,1) | Pyramid top, Weight | "Pyramid to 10 (100 total)" |
+| `static` | Time-based holds | Sets, Seconds, Weight | "4 × 30s" |
+
+**Pyramid Math:** Total reps = top² (e.g., top=10 → 100 total reps)
+
 **Hardcoded Defaults:**
-- Pull Ups, Push Ups, Dips, Leg Press, Bench Press, Dead Lift (dynamic, 4x10)
+- Pull Ups, Push Ups, Dips, Leg Press, Bench Press, Dead Lift (reps, 4x10)
 - Planche, Dead Hang, Front Lever, Back Lever (static, 4x30s)
 
 ### Workout
@@ -172,6 +185,41 @@ Two separate collections:
 
 ---
 
+## Widgets
+
+### ExerciseFormWidget
+
+Unified form widget used across all screens for editing exercises.
+
+**Props:**
+- `exercise: PlannedExercise?` - Existing exercise to edit (null for new)
+- `onSave: Function(PlannedExercise)` - Called when save button pressed
+- `onCancel: VoidCallback` - Called when cancel button pressed
+- `onDelete: VoidCallback?` - Called when delete button pressed (null hides button)
+- `autoAddNewExercises: bool` - If true, auto-adds new exercise names to storage
+- `showRestAfterExercise: bool` - If true, shows rest after exercise input (for workouts)
+
+**Mode Selector:**
+- 4 chips: Reps, Variable, Pyramid, Static
+- Switching mode preserves exercise name and weight, resets other fields
+
+**Mode-specific UI:**
+- `reps`: Sets field, Reps field, Weight field, Rest between sets (min:sec)
+- `variableSets`: Sets field, PerSetRepsInput (N fields), Weight field, PerSetRestInput (N min:sec fields)
+- `pyramid`: Pyramid Top field (shows total reps calculation), Weight field, Rest between sets (min:sec)
+- `static`: Sets field, Seconds field, Weight field, Rest between sets (min:sec)
+
+**Rest After Exercise (in workout context):**
+- Shown when `showRestAfterExercise=true` (Workouts screen, Complete dialog)
+- Rest period before the next exercise in the workout
+
+**Exercise Name Autocomplete:**
+- Shows all exercises (user-defined + defaults)
+- Selection auto-fills mode and all mode-specific defaults
+- Name field has auto-capitalization
+
+---
+
 ## Icon Selection
 
 Available workout icons:
@@ -193,20 +241,60 @@ Available workout icons:
 
 ---
 
+## Input Validation
+
+**Per-Set Reps Input:**
+- When N sets are specified, N input fields are shown for reps/duration
+- Cascading behavior: when focus leaves a field, value cascades to subsequent non-user-edited fields
+- Auto-filled fields have grey background as visual indicator
+- Tapping an auto-filled field clears it for fresh input
+- First set must have a value before saving
+
+**Rest Period Input:**
+- Two fields: minutes and seconds
+- Stored internally as total seconds only
+- Display calculated as "Xm Ys" format (e.g., "1m 30s", "2m", "45s")
+- For variableSets mode: per-set rest inputs with same cascading behavior as reps
+- For other modes: single rest input
+
+**Non-Negative Integer Validation:**
+- Applied to: sets, reps, seconds, pyramid top, offset days, rest minutes, rest seconds
+- Blocks minus sign and non-digit characters via input formatter
+
+**Weight Field:**
+- Allows negative values (for assisted exercises like pull-up machine)
+- Allows decimal values
+
+---
+
 ## Class Flows (Test Specifications)
 
 ### Exercise
 
 ```
-Exercise.create(name, type)
+Exercise.create(name, mode)
   → generates unique id (timestamp-based)
-  → defaultRepsOrDuration = 30 if static, 10 if dynamic
-  → defaultSets = 4
+  → defaultSets = 4 (for reps, variableSets, static)
+  → defaultReps = 10 (for reps mode)
+  → defaultPyramidTop = 10 (for pyramid mode)
+  → defaultSeconds = 30 (for static mode)
   → defaultWeight = 0
 
 Exercise.isCustom
   → true if id does NOT start with "default_"
   → false if id starts with "default_"
+
+Exercise.modeLabel
+  → "Reps" for reps mode
+  → "Variable" for variableSets mode
+  → "Pyramid" for pyramid mode
+  → "Static" for static mode
+
+Exercise.defaultsSummary
+  → "4 × 10 reps" for reps mode
+  → "4 sets (variable)" for variableSets mode
+  → "Pyramid to 10" for pyramid mode
+  → "4 × 30s" for static mode
 
 Exercise.fromJson → toJson
   → roundtrip preserves all fields
@@ -278,12 +366,52 @@ Workout.fromJson → toJson
 ### PlannedExercise
 
 ```
-PlannedExercise(name, type, sets, reps, weight?)
+PlannedExercise(name, mode, sets, ...)
   → stores target values for workout template
   → does not reference Exercise by id, only by name
 
+Mode-specific fields:
+  reps mode:
+    → targetSets: int
+    → targetReps: int
+    → targetWeight: double
+    → restBetweenSets: int? (seconds)
+
+  variableSets mode:
+    → targetSets: int
+    → targetRepsPerSet: List<int> (one value per set)
+    → targetWeight: double
+    → restBetweenSetsPerSet: List<int>? (seconds per set)
+
+  pyramid mode:
+    → pyramidTop: int (total reps = top²)
+    → targetWeight: double
+    → restBetweenSets: int? (seconds)
+
+  static mode:
+    → targetSets: int
+    → targetSeconds: int
+    → targetWeight: double
+    → restBetweenSets: int? (seconds)
+
+  All modes (in workout context):
+    → restAfterExercise: int? (seconds, rest before next exercise)
+
+PlannedExercise.displayString (getter)
+  → "4 × 10 reps" for reps mode
+  → "4 sets (10, 10, 8, 8)" for variableSets mode
+  → "Pyramid to 10 (100 total)" for pyramid mode
+  → "4 × 30s" for static mode
+
+PlannedExercise.restDisplayString (getter)
+  → formatted rest time (e.g., "1m 30s", "45s", "2m")
+  → empty string if no rest defined
+
+PlannedExercise.pyramidTotalReps (getter)
+  → returns pyramidTop² (total reps in pyramid)
+
 PlannedExercise.fromJson → toJson
-  → roundtrip preserves all fields
+  → roundtrip preserves all fields including rest values
 ```
 
 ### WorkoutStorage
@@ -367,12 +495,7 @@ ExercisesScreen:
   onUpdate → updateExercise() → reload list
   onDelete → deleteExercise() → reload list (only custom allowed)
 
-  Form field behavior (new exercise only):
-    → Shows defaults (4 sets, 10/30 reps, 0 weight)
-    → First tap on any field: clears value so user can type fresh
-    → Subsequent taps: no clearing
-    → When type changes: reps field resets to new default and will clear on next tap
-    → Editing existing: values preserved, no auto-clear
+  Uses ExerciseFormWidget with autoAddNewExercises=false
 
 WorkoutsScreen:
   onLoad → loadTemplates()
@@ -380,14 +503,9 @@ WorkoutsScreen:
   onEdit → updateTemplate() → reload list
   onDelete → deleteTemplate() (also removes all scheduled instances with same name)
 
-  ExerciseForm.onSave:
+  Uses ExerciseFormWidget with autoAddNewExercises=true
     → if exercise name not in getAllExercises():
       → auto-add to custom exercises with entered values
-
-  Form field behavior:
-    → New exercise: fields start empty, no auto-clear needed
-    → After autocomplete selection: fills defaults, no auto-clear
-    → Editing existing: values preserved, no auto-clear
 
 TodayScreen:
   onLoad → getScheduledForDate(today) + getCompletedForDate(today)
@@ -397,7 +515,7 @@ TodayScreen:
     → if completed: deleteCompleted()
 
   CompleteWorkoutDialog:
-    → shows editable exercise list (sets, reps, weight)
+    → shows editable exercise list using ExerciseFormWidget
     → can remove exercises or add from available exercises
     → on save: creates CompletedWorkout with modified values
 

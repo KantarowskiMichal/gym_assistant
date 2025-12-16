@@ -86,7 +86,6 @@ void main() {
     late Workout workout;
 
     setUp(() {
-      // Wednesday, January 15, 2025
       workout = Workout.create(
         name: 'Weekly Workout',
         startDate: DateTime(2025, 1, 15), // Wednesday
@@ -108,7 +107,6 @@ void main() {
     });
 
     test('returns true on same weekday one month later', () {
-      // February Wednesdays: 5, 12, 19, 26
       expect(workout.occursOn(DateTime(2025, 2, 5)), isTrue);
       expect(workout.occursOn(DateTime(2025, 2, 12)), isTrue);
       expect(workout.occursOn(DateTime(2025, 2, 19)), isTrue);
@@ -316,10 +314,9 @@ void main() {
         exercises: [
           PlannedExercise(
             exerciseName: 'Push Ups',
-            exerciseType: ExerciseType.dynamic,
+            mode: ExerciseMode.reps,
             targetSets: 4,
-            targetRepsOrDuration: 10,
-            targetWeight: 0,
+            targetReps: 10,
           ),
         ],
         startDate: DateTime(2025, 1, 15),
@@ -347,9 +344,9 @@ void main() {
         'exercises': [
           {
             'exerciseName': 'Plank',
-            'exerciseType': 'static',
+            'mode': 'static',
             'targetSets': 3,
-            'targetRepsOrDuration': 60,
+            'targetSeconds': 60,
             'targetWeight': 0,
           },
         ],
@@ -378,17 +375,16 @@ void main() {
         exercises: [
           PlannedExercise(
             exerciseName: 'Exercise 1',
-            exerciseType: ExerciseType.dynamic,
+            mode: ExerciseMode.reps,
             targetSets: 4,
-            targetRepsOrDuration: 12,
+            targetReps: 12,
             targetWeight: 20.5,
           ),
           PlannedExercise(
             exerciseName: 'Exercise 2',
-            exerciseType: ExerciseType.static,
+            mode: ExerciseMode.static,
             targetSets: 3,
-            targetRepsOrDuration: 45,
-            targetWeight: 0,
+            targetSeconds: 45,
           ),
         ],
         startDate: DateTime(2025, 3, 20),
@@ -441,28 +437,64 @@ void main() {
   });
 
   group('PlannedExercise', () {
-    test('constructor stores all target values', () {
+    test('reps mode stores target reps', () {
       final exercise = PlannedExercise(
         exerciseName: 'Test Exercise',
-        exerciseType: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         targetSets: 5,
-        targetRepsOrDuration: 15,
+        targetReps: 15,
         targetWeight: 25.5,
       );
 
       expect(exercise.exerciseName, equals('Test Exercise'));
-      expect(exercise.exerciseType, equals(ExerciseType.dynamic));
+      expect(exercise.mode, equals(ExerciseMode.reps));
       expect(exercise.targetSets, equals(5));
-      expect(exercise.targetRepsOrDuration, equals(15));
+      expect(exercise.targetReps, equals(15));
       expect(exercise.targetWeight, equals(25.5));
+    });
+
+    test('variableSets mode stores reps per set', () {
+      final exercise = PlannedExercise(
+        exerciseName: 'Variable Exercise',
+        mode: ExerciseMode.variableSets,
+        targetSets: 4,
+        targetRepsPerSet: [10, 10, 8, 8],
+      );
+
+      expect(exercise.mode, equals(ExerciseMode.variableSets));
+      expect(exercise.targetRepsPerSet, equals([10, 10, 8, 8]));
+    });
+
+    test('pyramid mode stores pyramid top', () {
+      final exercise = PlannedExercise(
+        exerciseName: 'Pyramid Exercise',
+        mode: ExerciseMode.pyramid,
+        pyramidTop: 10,
+      );
+
+      expect(exercise.mode, equals(ExerciseMode.pyramid));
+      expect(exercise.pyramidTop, equals(10));
+      expect(exercise.pyramidTotalReps, equals(100)); // 10^2
+    });
+
+    test('static mode stores target seconds', () {
+      final exercise = PlannedExercise(
+        exerciseName: 'Static Exercise',
+        mode: ExerciseMode.static,
+        targetSets: 3,
+        targetSeconds: 45,
+      );
+
+      expect(exercise.mode, equals(ExerciseMode.static));
+      expect(exercise.targetSeconds, equals(45));
     });
 
     test('default targetWeight is 0', () {
       final exercise = PlannedExercise(
         exerciseName: 'Test',
-        exerciseType: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         targetSets: 4,
-        targetRepsOrDuration: 10,
+        targetReps: 10,
       );
 
       expect(exercise.targetWeight, equals(0));
@@ -471,9 +503,9 @@ void main() {
     test('toJson -> fromJson roundtrip preserves all fields', () {
       final original = PlannedExercise(
         exerciseName: 'Roundtrip Exercise',
-        exerciseType: ExerciseType.static,
+        mode: ExerciseMode.variableSets,
         targetSets: 3,
-        targetRepsOrDuration: 45,
+        targetRepsPerSet: [12, 10, 8],
         targetWeight: 10.5,
       );
 
@@ -481,40 +513,44 @@ void main() {
       final restored = PlannedExercise.fromJson(json);
 
       expect(restored.exerciseName, equals(original.exerciseName));
-      expect(restored.exerciseType, equals(original.exerciseType));
+      expect(restored.mode, equals(original.mode));
       expect(restored.targetSets, equals(original.targetSets));
-      expect(restored.targetRepsOrDuration, equals(original.targetRepsOrDuration));
+      expect(restored.targetRepsPerSet, equals(original.targetRepsPerSet));
       expect(restored.targetWeight, equals(original.targetWeight));
     });
 
-    test('repsOrDurationLabel returns "reps" for dynamic', () {
-      final exercise = PlannedExercise(
-        exerciseName: 'Dynamic',
-        exerciseType: ExerciseType.dynamic,
-        targetSets: 4,
-        targetRepsOrDuration: 10,
-      );
-
-      expect(exercise.repsOrDurationLabel, equals('reps'));
+    test('modeLabel returns correct label', () {
+      expect(PlannedExercise(exerciseName: 'Test', mode: ExerciseMode.reps).modeLabel, equals('Reps'));
+      expect(PlannedExercise(exerciseName: 'Test', mode: ExerciseMode.variableSets).modeLabel, equals('Variable'));
+      expect(PlannedExercise(exerciseName: 'Test', mode: ExerciseMode.pyramid).modeLabel, equals('Pyramid'));
+      expect(PlannedExercise(exerciseName: 'Test', mode: ExerciseMode.static).modeLabel, equals('Static'));
     });
 
-    test('repsOrDurationLabel returns "seconds" for static', () {
-      final exercise = PlannedExercise(
-        exerciseName: 'Static',
-        exerciseType: ExerciseType.static,
-        targetSets: 4,
-        targetRepsOrDuration: 30,
+    test('displayString formats correctly for each mode', () {
+      expect(
+        PlannedExercise(exerciseName: 'Test', mode: ExerciseMode.reps, targetSets: 4, targetReps: 10).displayString,
+        equals('4 × 10 reps'),
       );
-
-      expect(exercise.repsOrDurationLabel, equals('seconds'));
+      expect(
+        PlannedExercise(exerciseName: 'Test', mode: ExerciseMode.variableSets, targetSets: 3, targetRepsPerSet: [10, 8, 6]).displayString,
+        equals('3 sets (10, 8, 6)'),
+      );
+      expect(
+        PlannedExercise(exerciseName: 'Test', mode: ExerciseMode.pyramid, pyramidTop: 10).displayString,
+        equals('Pyramid to 10'),
+      );
+      expect(
+        PlannedExercise(exerciseName: 'Test', mode: ExerciseMode.static, targetSets: 3, targetSeconds: 30).displayString,
+        equals('3 × 30s'),
+      );
     });
 
     test('copyWith updates specified fields', () {
       final original = PlannedExercise(
         exerciseName: 'Original',
-        exerciseType: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         targetSets: 4,
-        targetRepsOrDuration: 10,
+        targetReps: 10,
         targetWeight: 0,
       );
 
@@ -526,7 +562,7 @@ void main() {
       expect(copy.exerciseName, equals('Original'));
       expect(copy.targetSets, equals(5));
       expect(copy.targetWeight, equals(20.0));
-      expect(copy.targetRepsOrDuration, equals(10));
+      expect(copy.targetReps, equals(10));
     });
   });
 

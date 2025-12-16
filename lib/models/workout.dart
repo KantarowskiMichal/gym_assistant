@@ -183,58 +183,190 @@ class Workout {
   }
 }
 
-/// An exercise within a planned workout (template, not a log entry)
+/// An exercise within a planned workout
 class PlannedExercise {
   final String exerciseName;
-  final ExerciseType exerciseType;
-  final int targetSets;
-  final int targetRepsOrDuration;
+  final ExerciseMode mode;
+  final int targetSets;              // For reps, variableSets, static
+  final int? targetReps;             // For reps mode
+  final List<int>? targetRepsPerSet; // For variableSets mode
+  final int? pyramidTop;             // For pyramid mode
+  final int? targetSeconds;          // For static mode
   final double targetWeight;
+  final int? restBetweenSets;        // Rest in seconds (for reps, pyramid, static)
+  final List<int>? restBetweenSetsPerSet; // Rest per set in seconds (for variableSets)
+  final int? restAfterExercise;      // Rest after this exercise before next one (in seconds)
 
   PlannedExercise({
     required this.exerciseName,
-    required this.exerciseType,
-    required this.targetSets,
-    required this.targetRepsOrDuration,
+    required this.mode,
+    this.targetSets = 4,
+    this.targetReps,
+    this.targetRepsPerSet,
+    this.pyramidTop,
+    this.targetSeconds,
     this.targetWeight = 0,
+    this.restBetweenSets,
+    this.restBetweenSetsPerSet,
+    this.restAfterExercise,
   });
+
+  /// Calculate total reps for pyramid mode (top² formula)
+  int get pyramidTotalReps {
+    if (pyramidTop == null || pyramidTop! <= 0) return 0;
+    return pyramidTop! * pyramidTop!;
+  }
+
+  /// Get display string for this exercise
+  String get displayString {
+    final weightSuffix = targetWeight != 0 ? ' @ ${targetWeight}kg' : '';
+
+    switch (mode) {
+      case ExerciseMode.reps:
+        return '$targetSets × ${targetReps ?? 10} reps$weightSuffix';
+      case ExerciseMode.variableSets:
+        if (targetRepsPerSet == null || targetRepsPerSet!.isEmpty) {
+          return '$targetSets sets$weightSuffix';
+        }
+        final allSame = targetRepsPerSet!.every((r) => r == targetRepsPerSet!.first);
+        if (allSame) {
+          return '$targetSets × ${targetRepsPerSet!.first} reps$weightSuffix';
+        }
+        return '$targetSets sets (${targetRepsPerSet!.join(', ')})$weightSuffix';
+      case ExerciseMode.pyramid:
+        return 'Pyramid to ${pyramidTop ?? 10}$weightSuffix';
+      case ExerciseMode.static:
+        return '$targetSets × ${targetSeconds ?? 30}s$weightSuffix';
+    }
+  }
+
+  /// Get mode label
+  String get modeLabel {
+    switch (mode) {
+      case ExerciseMode.reps:
+        return 'Reps';
+      case ExerciseMode.variableSets:
+        return 'Variable';
+      case ExerciseMode.pyramid:
+        return 'Pyramid';
+      case ExerciseMode.static:
+        return 'Static';
+    }
+  }
 
   Map<String, dynamic> toJson() => {
     'exerciseName': exerciseName,
-    'exerciseType': exerciseType.name,
+    'mode': mode.name,
     'targetSets': targetSets,
-    'targetRepsOrDuration': targetRepsOrDuration,
+    'targetReps': targetReps,
+    'targetRepsPerSet': targetRepsPerSet,
+    'pyramidTop': pyramidTop,
+    'targetSeconds': targetSeconds,
     'targetWeight': targetWeight,
+    'restBetweenSets': restBetweenSets,
+    'restBetweenSetsPerSet': restBetweenSetsPerSet,
+    'restAfterExercise': restAfterExercise,
   };
 
   factory PlannedExercise.fromJson(Map<String, dynamic> json) {
     return PlannedExercise(
       exerciseName: json['exerciseName'] as String,
-      exerciseType: ExerciseType.values.firstWhere(
-        (e) => e.name == json['exerciseType'],
+      mode: ExerciseMode.values.firstWhere(
+        (e) => e.name == json['mode'],
       ),
-      targetSets: json['targetSets'] as int,
-      targetRepsOrDuration: json['targetRepsOrDuration'] as int,
+      targetSets: json['targetSets'] as int? ?? 4,
+      targetReps: json['targetReps'] as int?,
+      targetRepsPerSet: (json['targetRepsPerSet'] as List<dynamic>?)
+          ?.map((e) => e as int)
+          .toList(),
+      pyramidTop: json['pyramidTop'] as int?,
+      targetSeconds: json['targetSeconds'] as int?,
       targetWeight: (json['targetWeight'] as num?)?.toDouble() ?? 0,
+      restBetweenSets: json['restBetweenSets'] as int?,
+      restBetweenSetsPerSet: (json['restBetweenSetsPerSet'] as List<dynamic>?)
+          ?.map((e) => e as int)
+          .toList(),
+      restAfterExercise: json['restAfterExercise'] as int?,
+    );
+  }
+
+  /// Create from an Exercise template
+  factory PlannedExercise.fromExercise(Exercise exercise) {
+    return PlannedExercise(
+      exerciseName: exercise.name,
+      mode: exercise.mode,
+      targetSets: exercise.defaultSets,
+      targetReps: exercise.mode == ExerciseMode.reps ? exercise.defaultReps : null,
+      targetRepsPerSet: exercise.mode == ExerciseMode.variableSets
+          ? List.filled(exercise.defaultSets, exercise.defaultReps)
+          : null,
+      pyramidTop: exercise.mode == ExerciseMode.pyramid ? exercise.defaultPyramidTop : null,
+      targetSeconds: exercise.mode == ExerciseMode.static ? exercise.defaultSeconds : null,
+      targetWeight: exercise.defaultWeight,
+      restBetweenSets: exercise.mode != ExerciseMode.variableSets ? exercise.defaultRestBetweenSets : null,
+      restBetweenSetsPerSet: exercise.mode == ExerciseMode.variableSets
+          ? (exercise.defaultRestBetweenSetsPerSet ?? (exercise.defaultRestBetweenSets != null
+              ? List.filled(exercise.defaultSets, exercise.defaultRestBetweenSets!)
+              : null))
+          : null,
     );
   }
 
   PlannedExercise copyWith({
     String? exerciseName,
-    ExerciseType? exerciseType,
+    ExerciseMode? mode,
     int? targetSets,
-    int? targetRepsOrDuration,
+    int? targetReps,
+    List<int>? targetRepsPerSet,
+    int? pyramidTop,
+    int? targetSeconds,
     double? targetWeight,
+    int? restBetweenSets,
+    List<int>? restBetweenSetsPerSet,
+    int? restAfterExercise,
   }) {
     return PlannedExercise(
       exerciseName: exerciseName ?? this.exerciseName,
-      exerciseType: exerciseType ?? this.exerciseType,
+      mode: mode ?? this.mode,
       targetSets: targetSets ?? this.targetSets,
-      targetRepsOrDuration: targetRepsOrDuration ?? this.targetRepsOrDuration,
+      targetReps: targetReps ?? this.targetReps,
+      targetRepsPerSet: targetRepsPerSet ?? this.targetRepsPerSet,
+      pyramidTop: pyramidTop ?? this.pyramidTop,
+      targetSeconds: targetSeconds ?? this.targetSeconds,
       targetWeight: targetWeight ?? this.targetWeight,
+      restBetweenSets: restBetweenSets ?? this.restBetweenSets,
+      restBetweenSetsPerSet: restBetweenSetsPerSet ?? this.restBetweenSetsPerSet,
+      restAfterExercise: restAfterExercise ?? this.restAfterExercise,
     );
   }
 
-  String get repsOrDurationLabel =>
-      exerciseType == ExerciseType.dynamic ? 'reps' : 'seconds';
+  /// Get formatted rest time string for display
+  String get restDisplayString {
+    if (mode == ExerciseMode.variableSets && restBetweenSetsPerSet != null && restBetweenSetsPerSet!.isNotEmpty) {
+      // Check if all rest values are the same
+      final allSame = restBetweenSetsPerSet!.every((r) => r == restBetweenSetsPerSet!.first);
+      if (allSame && restBetweenSetsPerSet!.first > 0) {
+        return _formatSeconds(restBetweenSetsPerSet!.first);
+      }
+      final formattedRests = restBetweenSetsPerSet!.map(_formatSeconds).join(', ');
+      return formattedRests;
+    }
+    if (restBetweenSets != null && restBetweenSets! > 0) {
+      return _formatSeconds(restBetweenSets!);
+    }
+    return '';
+  }
+
+  static String _formatSeconds(int totalSeconds) {
+    if (totalSeconds <= 0) return '';
+    final minutes = totalSeconds ~/ 60;
+    final seconds = totalSeconds % 60;
+    if (minutes > 0 && seconds > 0) {
+      return '${minutes}m ${seconds}s';
+    } else if (minutes > 0) {
+      return '${minutes}m';
+    } else {
+      return '${seconds}s';
+    }
+  }
 }

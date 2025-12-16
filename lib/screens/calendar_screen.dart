@@ -3,6 +3,7 @@ import '../models/workout.dart';
 import '../models/completed_workout.dart';
 import '../services/workout_storage.dart';
 import '../services/completed_workout_storage.dart';
+import '../utils/input_formatters.dart';
 import '../widgets/complete_workout_dialog.dart';
 import 'workouts_screen.dart';
 
@@ -784,6 +785,7 @@ class _ScheduleWorkoutDialogState extends State<_ScheduleWorkoutDialog> {
                     child: TextField(
                       controller: _offsetController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [NonNegativeIntFormatter()],
                       textAlign: TextAlign.center,
                       onTap: _onOffsetTap,
                       decoration: const InputDecoration(isDense: true),

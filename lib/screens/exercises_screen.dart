@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/exercise.dart';
+import '../models/workout.dart';
 import '../services/exercise_storage.dart';
+import '../widgets/exercise_form.dart';
 
 class ExercisesScreen extends StatefulWidget {
   const ExercisesScreen({super.key});
@@ -22,7 +24,6 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
   }
 
   Future<void> _loadExercises() async {
-    // Only show user-defined exercises (not hardcoded defaults)
     final exercises = await ExerciseStorage.loadCustomExercises();
     exercises.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     setState(() {
@@ -45,7 +46,21 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     });
   }
 
-  Future<void> _saveNewExercise(Exercise exercise) async {
+  Future<void> _saveNewExercise(PlannedExercise planned) async {
+    // Convert PlannedExercise to Exercise
+    final exercise = Exercise.create(
+      name: planned.exerciseName,
+      mode: planned.mode,
+      defaultSets: planned.targetSets,
+      defaultReps: planned.targetReps ?? 10,
+      defaultRepsPerSet: planned.targetRepsPerSet,
+      defaultPyramidTop: planned.pyramidTop ?? 10,
+      defaultSeconds: planned.targetSeconds ?? 30,
+      defaultWeight: planned.targetWeight,
+      defaultRestBetweenSets: planned.restBetweenSets,
+      defaultRestBetweenSetsPerSet: planned.restBetweenSetsPerSet,
+    );
+
     final success = await ExerciseStorage.addExercise(exercise);
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -57,8 +72,21 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     _loadExercises();
   }
 
-  Future<void> _updateExercise(Exercise exercise) async {
-    final success = await ExerciseStorage.updateExercise(exercise);
+  Future<void> _updateExercise(Exercise original, PlannedExercise planned) async {
+    final updated = original.copyWith(
+      name: planned.exerciseName,
+      mode: planned.mode,
+      defaultSets: planned.targetSets,
+      defaultReps: planned.targetReps,
+      defaultRepsPerSet: planned.targetRepsPerSet,
+      defaultPyramidTop: planned.pyramidTop,
+      defaultSeconds: planned.targetSeconds,
+      defaultWeight: planned.targetWeight,
+      defaultRestBetweenSets: planned.restBetweenSets,
+      defaultRestBetweenSetsPerSet: planned.restBetweenSetsPerSet,
+    );
+
+    final success = await ExerciseStorage.updateExercise(updated);
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You already have another custom exercise with this name')),
@@ -81,6 +109,28 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     _loadExercises();
   }
 
+  /// Convert Exercise to PlannedExercise for editing
+  PlannedExercise _exerciseToPlanned(Exercise exercise) {
+    return PlannedExercise(
+      exerciseName: exercise.name,
+      mode: exercise.mode,
+      targetSets: exercise.defaultSets,
+      targetReps: exercise.mode == ExerciseMode.reps ? exercise.defaultReps : null,
+      targetRepsPerSet: exercise.mode == ExerciseMode.variableSets
+          ? (exercise.defaultRepsPerSet ?? List.filled(exercise.defaultSets, exercise.defaultReps))
+          : null,
+      pyramidTop: exercise.mode == ExerciseMode.pyramid ? exercise.defaultPyramidTop : null,
+      targetSeconds: exercise.mode == ExerciseMode.static ? exercise.defaultSeconds : null,
+      targetWeight: exercise.defaultWeight,
+      restBetweenSets: exercise.mode != ExerciseMode.variableSets ? exercise.defaultRestBetweenSets : null,
+      restBetweenSetsPerSet: exercise.mode == ExerciseMode.variableSets
+          ? (exercise.defaultRestBetweenSetsPerSet ?? (exercise.defaultRestBetweenSets != null
+              ? List.filled(exercise.defaultSets, exercise.defaultRestBetweenSets!)
+              : null))
+          : null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -93,30 +143,35 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                // Info text
                 Text(
                   'Define exercises with default values. These will be available when creating workouts.',
                   style: TextStyle(color: Colors.grey[600]),
                 ),
                 const SizedBox(height: 16),
 
-                // New exercise form
                 if (_isAddingNew)
-                  _ExerciseForm(
+                  ExerciseFormWidget(
                     onSave: _saveNewExercise,
                     onCancel: _cancelEdit,
+                    autoAddNewExercises: false,
                   ),
 
-                // Exercise list
                 ..._exercises.map((exercise) {
                   final isExpanded = _expandedExerciseId == exercise.id;
-                  return _ExerciseCard(
+
+                  if (isExpanded) {
+                    return ExerciseFormWidget(
+                      exercise: _exerciseToPlanned(exercise),
+                      onSave: (p) => _updateExercise(exercise, p),
+                      onCancel: _cancelEdit,
+                      onDelete: exercise.isCustom ? () => _deleteExercise(exercise) : null,
+                      autoAddNewExercises: false,
+                    );
+                  }
+
+                  return _ExerciseListCard(
                     exercise: exercise,
-                    isExpanded: isExpanded,
                     onTap: () => setState(() => _expandedExerciseId = exercise.id),
-                    onSave: _updateExercise,
-                    onCancel: _cancelEdit,
-                    onDelete: () => _deleteExercise(exercise),
                   );
                 }),
               ],
@@ -132,306 +187,17 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
   }
 }
 
-class _ExerciseForm extends StatefulWidget {
-  final Exercise? exercise;
-  final Function(Exercise) onSave;
-  final VoidCallback onCancel;
-
-  const _ExerciseForm({
-    this.exercise,
-    required this.onSave,
-    required this.onCancel,
-  });
-
-  @override
-  State<_ExerciseForm> createState() => _ExerciseFormState();
-}
-
-class _ExerciseFormState extends State<_ExerciseForm> {
-  late TextEditingController _nameController;
-  late TextEditingController _setsController;
-  late TextEditingController _repsController;
-  late TextEditingController _weightController;
-  late ExerciseType _type;
-
-  // Track if fields have been touched (for clearing defaults)
-  bool _nameTouched = false;
-  bool _setsTouched = false;
-  bool _repsTouched = false;
-  bool _weightTouched = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final e = widget.exercise;
-    final isEditing = e != null;
-
-    _nameController = TextEditingController(text: e?.name ?? '');
-    _setsController = TextEditingController(
-      text: (e?.defaultSets ?? 4).toString(),
-    );
-    _repsController = TextEditingController(
-      text: (e?.defaultRepsOrDuration ?? 10).toString(),
-    );
-    _weightController = TextEditingController(
-      text: (e?.defaultWeight ?? 0).toString(),
-    );
-    _type = e?.type ?? ExerciseType.dynamic;
-
-    // If editing, mark all as touched so we don't clear existing values
-    if (isEditing) {
-      _nameTouched = true;
-      _setsTouched = true;
-      _repsTouched = true;
-      _weightTouched = true;
-    }
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _setsController.dispose();
-    _repsController.dispose();
-    _weightController.dispose();
-    super.dispose();
-  }
-
-  void _clearFieldOnTap(TextEditingController controller, bool Function() isTouched, VoidCallback markTouched) {
-    if (!isTouched()) {
-      controller.clear();
-      markTouched();
-    }
-  }
-
-  void _onTypeChanged(ExerciseType newType) {
-    if (newType != _type) {
-      setState(() {
-        _type = newType;
-        // Update default reps/duration when type changes and reset touched flag
-        _repsController.text = newType == ExerciseType.static ? '30' : '10';
-        _repsTouched = false;
-      });
-    }
-  }
-
-  void _submit() {
-    final name = _nameController.text.trim();
-    final sets = int.tryParse(_setsController.text);
-    final reps = int.tryParse(_repsController.text);
-    final weight = double.tryParse(_weightController.text) ?? 0;
-
-    if (name.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter an exercise name')),
-      );
-      return;
-    }
-
-    if (sets == null || sets <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter valid sets')),
-      );
-      return;
-    }
-
-    if (reps == null || reps <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter valid reps/duration')),
-      );
-      return;
-    }
-
-    Exercise exercise;
-    if (widget.exercise != null) {
-      exercise = widget.exercise!.copyWith(
-        name: name,
-        type: _type,
-        defaultSets: sets,
-        defaultRepsOrDuration: reps,
-        defaultWeight: weight,
-      );
-    } else {
-      exercise = Exercise.create(
-        name: name,
-        type: _type,
-        defaultSets: sets,
-        defaultRepsOrDuration: reps,
-        defaultWeight: weight,
-      );
-    }
-
-    widget.onSave(exercise);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isStatic = _type == ExerciseType.static;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: _nameController,
-              onTap: () => _clearFieldOnTap(
-                _nameController,
-                () => _nameTouched,
-                () => _nameTouched = true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Exercise Name',
-                isDense: true,
-              ),
-              textCapitalization: TextCapitalization.words,
-            ),
-            const SizedBox(height: 16),
-
-            // Type selector
-            Row(
-              children: [
-                const Text('Type: '),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('Dynamic'),
-                  selected: _type == ExerciseType.dynamic,
-                  onSelected: (s) {
-                    if (s) _onTypeChanged(ExerciseType.dynamic);
-                  },
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('Static'),
-                  selected: _type == ExerciseType.static,
-                  onSelected: (s) {
-                    if (s) _onTypeChanged(ExerciseType.static);
-                  },
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // Default values
-            const Text('Default Values:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _setsController,
-                    keyboardType: TextInputType.number,
-                    onTap: () => _clearFieldOnTap(
-                      _setsController,
-                      () => _setsTouched,
-                      () => _setsTouched = true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Sets',
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _repsController,
-                    keyboardType: TextInputType.number,
-                    onTap: () => _clearFieldOnTap(
-                      _repsController,
-                      () => _repsTouched,
-                      () => _repsTouched = true,
-                    ),
-                    decoration: InputDecoration(
-                      labelText: isStatic ? 'Seconds' : 'Reps',
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _weightController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    onTap: () => _clearFieldOnTap(
-                      _weightController,
-                      () => _weightTouched,
-                      () => _weightTouched = true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Weight (kg)',
-                      isDense: true,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: widget.onCancel,
-                  child: const Text('Cancel'),
-                ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _submit,
-                  child: Text(widget.exercise != null ? 'Save' : 'Add'),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ExerciseCard extends StatelessWidget {
+class _ExerciseListCard extends StatelessWidget {
   final Exercise exercise;
-  final bool isExpanded;
   final VoidCallback onTap;
-  final Function(Exercise) onSave;
-  final VoidCallback onCancel;
-  final VoidCallback onDelete;
 
-  const _ExerciseCard({
+  const _ExerciseListCard({
     required this.exercise,
-    required this.isExpanded,
     required this.onTap,
-    required this.onSave,
-    required this.onCancel,
-    required this.onDelete,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (isExpanded) {
-      return Stack(
-        children: [
-          _ExerciseForm(
-            exercise: exercise,
-            onSave: onSave,
-            onCancel: onCancel,
-          ),
-          if (exercise.isCustom)
-            Positioned(
-              top: 8,
-              right: 8,
-              child: IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
-                onPressed: onDelete,
-              ),
-            ),
-        ],
-      );
-    }
-
-    final isStatic = exercise.type == ExerciseType.static;
-
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: InkWell(
@@ -472,23 +238,40 @@ class _ExerciseCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${exercise.defaultSets} sets × ${exercise.defaultRepsOrDuration} ${exercise.repsOrDurationLabel}'
-                      '${exercise.defaultWeight > 0 ? ' @ ${exercise.defaultWeight}kg' : ''}',
+                      _buildSummary(),
                       style: TextStyle(color: Colors.grey[600], fontSize: 12),
                     ),
                   ],
                 ),
               ),
               Chip(
-                label: Text(isStatic ? 'Static' : 'Dynamic'),
+                label: Text(exercise.modeLabel),
                 visualDensity: VisualDensity.compact,
                 padding: EdgeInsets.zero,
-                backgroundColor: isStatic ? Colors.orange[100] : Colors.green[100],
+                backgroundColor: _getModeColor(exercise.mode),
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  String _buildSummary() {
+    final weightSuffix = exercise.defaultWeight > 0 ? ' @ ${exercise.defaultWeight}kg' : '';
+    return '${exercise.defaultsSummary}$weightSuffix';
+  }
+
+  Color? _getModeColor(ExerciseMode mode) {
+    switch (mode) {
+      case ExerciseMode.reps:
+        return Colors.green[100];
+      case ExerciseMode.variableSets:
+        return Colors.blue[100];
+      case ExerciseMode.pyramid:
+        return Colors.purple[100];
+      case ExerciseMode.static:
+        return Colors.orange[100];
+    }
   }
 }

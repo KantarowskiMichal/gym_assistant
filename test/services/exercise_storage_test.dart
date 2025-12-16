@@ -20,9 +20,9 @@ void main() {
     test('returns stored custom exercises', () async {
       final customExercise = Exercise.create(
         name: 'Custom Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         defaultSets: 3,
-        defaultRepsOrDuration: 15,
+        defaultReps: 15,
       );
 
       SharedPreferences.setMockInitialValues({
@@ -68,7 +68,7 @@ void main() {
     test('returns custom + defaults combined', () async {
       final customExercise = Exercise.create(
         name: 'My Custom Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       SharedPreferences.setMockInitialValues({
@@ -83,12 +83,11 @@ void main() {
     });
 
     test('custom exercise overrides default with same name (case-insensitive)', () async {
-      // Create a custom "Pull Ups" with different defaults
       final customPullUps = Exercise.create(
         name: 'Pull Ups',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         defaultSets: 5,
-        defaultRepsOrDuration: 8,
+        defaultReps: 8,
         defaultWeight: 10.0,
       );
 
@@ -98,21 +97,19 @@ void main() {
 
       final exercises = await ExerciseStorage.getAllExercises();
 
-      // Should still have same total count (custom replaces default)
       expect(exercises.length, equals(Exercise.defaults.length));
 
-      // Find Pull Ups and verify it's the custom one
       final pullUps = exercises.firstWhere((e) => e.name == 'Pull Ups');
       expect(pullUps.defaultSets, equals(5));
-      expect(pullUps.defaultRepsOrDuration, equals(8));
+      expect(pullUps.defaultReps, equals(8));
       expect(pullUps.defaultWeight, equals(10.0));
       expect(pullUps.isCustom, isTrue);
     });
 
     test('override is case-insensitive', () async {
       final customPullUps = Exercise.create(
-        name: 'PULL UPS', // Different case
-        type: ExerciseType.dynamic,
+        name: 'PULL UPS',
+        mode: ExerciseMode.reps,
         defaultSets: 6,
       );
 
@@ -122,15 +119,14 @@ void main() {
 
       final exercises = await ExerciseStorage.getAllExercises();
 
-      // Should override the default "Pull Ups"
       expect(exercises.length, equals(Exercise.defaults.length));
       expect(exercises.any((e) => e.name == 'PULL UPS'), isTrue);
       expect(exercises.where((e) => e.name.toLowerCase() == 'pull ups').length, equals(1));
     });
 
     test('results are sorted alphabetically', () async {
-      final customA = Exercise.create(name: 'Aardvark Exercise', type: ExerciseType.dynamic);
-      final customZ = Exercise.create(name: 'Zebra Exercise', type: ExerciseType.dynamic);
+      final customA = Exercise.create(name: 'Aardvark Exercise', mode: ExerciseMode.reps);
+      final customZ = Exercise.create(name: 'Zebra Exercise', mode: ExerciseMode.reps);
 
       SharedPreferences.setMockInitialValues({
         'custom_exercises': jsonEncode([customZ.toJson(), customA.toJson()]),
@@ -138,10 +134,8 @@ void main() {
 
       final exercises = await ExerciseStorage.getAllExercises();
 
-      // First exercise should be "Aardvark Exercise"
       expect(exercises.first.name, equals('Aardvark Exercise'));
 
-      // Verify list is sorted
       for (var i = 0; i < exercises.length - 1; i++) {
         expect(
           exercises[i].name.toLowerCase().compareTo(exercises[i + 1].name.toLowerCase()),
@@ -161,7 +155,7 @@ void main() {
     test('returns custom exercise if exists', () async {
       final customPullUps = Exercise.create(
         name: 'Pull Ups',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         defaultSets: 6,
       );
 
@@ -192,27 +186,26 @@ void main() {
 
   group('addExercise()', () {
     test('returns false if name already exists in custom exercises (case-insensitive)', () async {
-      final exercise1 = Exercise.create(name: 'My Exercise', type: ExerciseType.dynamic);
+      final exercise1 = Exercise.create(name: 'My Exercise', mode: ExerciseMode.reps);
 
       SharedPreferences.setMockInitialValues({
         'custom_exercises': jsonEncode([exercise1.toJson()]),
       });
 
-      final exercise2 = Exercise.create(name: 'MY EXERCISE', type: ExerciseType.static);
+      final exercise2 = Exercise.create(name: 'MY EXERCISE', mode: ExerciseMode.static);
       final result = await ExerciseStorage.addExercise(exercise2);
 
       expect(result, isFalse);
 
-      // Verify original is unchanged
       final exercises = await ExerciseStorage.loadCustomExercises();
       expect(exercises.length, equals(1));
-      expect(exercises.first.type, equals(ExerciseType.dynamic));
+      expect(exercises.first.mode, equals(ExerciseMode.reps));
     });
 
     test('returns true and saves for unique name', () async {
       final exercise = Exercise.create(
         name: 'Brand New Exercise',
-        type: ExerciseType.static,
+        mode: ExerciseMode.static,
         defaultSets: 3,
       );
 
@@ -227,22 +220,20 @@ void main() {
 
     test('can add exercise with same name as default (creates override)', () async {
       final customPullUps = Exercise.create(
-        name: 'Pull Ups', // Same as default
-        type: ExerciseType.dynamic,
+        name: 'Pull Ups',
+        mode: ExerciseMode.reps,
         defaultSets: 5,
-        defaultRepsOrDuration: 12,
+        defaultReps: 12,
       );
 
       final result = await ExerciseStorage.addExercise(customPullUps);
 
       expect(result, isTrue);
 
-      // Verify it's stored
       final customExercises = await ExerciseStorage.loadCustomExercises();
       expect(customExercises.length, equals(1));
       expect(customExercises.first.defaultSets, equals(5));
 
-      // Verify it overrides in getAllExercises
       final allExercises = await ExerciseStorage.getAllExercises();
       final pullUps = allExercises.firstWhere((e) => e.name == 'Pull Ups');
       expect(pullUps.defaultSets, equals(5));
@@ -250,12 +241,12 @@ void main() {
     });
 
     test('appends to existing custom exercises', () async {
-      final exercise1 = Exercise.create(name: 'Exercise 1', type: ExerciseType.dynamic);
+      final exercise1 = Exercise.create(name: 'Exercise 1', mode: ExerciseMode.reps);
       SharedPreferences.setMockInitialValues({
         'custom_exercises': jsonEncode([exercise1.toJson()]),
       });
 
-      final exercise2 = Exercise.create(name: 'Exercise 2', type: ExerciseType.static);
+      final exercise2 = Exercise.create(name: 'Exercise 2', mode: ExerciseMode.static);
       await ExerciseStorage.addExercise(exercise2);
 
       final exercises = await ExerciseStorage.loadCustomExercises();
@@ -267,7 +258,7 @@ void main() {
     test('updates existing exercise by ID', () async {
       final exercise = Exercise.create(
         name: 'Original Name',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         defaultSets: 4,
       );
 
@@ -287,42 +278,37 @@ void main() {
     });
 
     test('returns false if new name conflicts with another custom exercise', () async {
-      // Use explicit IDs to avoid timing issues
       final exercise1 = Exercise(
         id: 'test_conflict_id_1',
         name: 'Conflict Exercise 1',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
       final exercise2 = Exercise(
         id: 'test_conflict_id_2',
         name: 'Conflict Exercise 2',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       SharedPreferences.setMockInitialValues({
         'custom_exercises': jsonEncode([exercise1.toJson(), exercise2.toJson()]),
       });
 
-      // Try to rename exercise1 to exercise2's name
       final updated = exercise1.copyWith(name: 'Conflict Exercise 2');
       final result = await ExerciseStorage.updateExercise(updated);
 
       expect(result, isFalse);
 
-      // Verify nothing changed
       final exercises = await ExerciseStorage.loadCustomExercises();
       expect(exercises.any((e) => e.name == 'Conflict Exercise 1'), isTrue);
     });
 
     test('adds as new if ID not found (override scenario)', () async {
-      // Start with no custom exercises
       SharedPreferences.setMockInitialValues({});
 
-      // Create exercise with ID that doesn't exist in custom
       final newExercise = Exercise(
         id: 'new_unique_id',
         name: 'New Exercise',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       final result = await ExerciseStorage.updateExercise(newExercise);
@@ -337,23 +323,21 @@ void main() {
 
   group('deleteExercise()', () {
     test('removes exercise from custom list', () async {
-      // Use explicit IDs
       final exercise1 = Exercise(
         id: 'delete_test_id_1',
         name: 'Delete Exercise 1',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
       final exercise2 = Exercise(
         id: 'delete_test_id_2',
         name: 'Delete Exercise 2',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
       );
 
       SharedPreferences.setMockInitialValues({
         'custom_exercises': jsonEncode([exercise1.toJson(), exercise2.toJson()]),
       });
 
-      // Verify both exist
       var exercises = await ExerciseStorage.loadCustomExercises();
       expect(exercises.length, equals(2));
 
@@ -365,16 +349,14 @@ void main() {
     });
 
     test('does not affect hardcoded defaults', () async {
-      // Try to delete a default exercise ID
       await ExerciseStorage.deleteExercise('default_pull_ups');
 
-      // Default should still be available
       final allExercises = await ExerciseStorage.getAllExercises();
       expect(allExercises.any((e) => e.name == 'Pull Ups'), isTrue);
     });
 
     test('does nothing if ID not found', () async {
-      final exercise = Exercise.create(name: 'Test', type: ExerciseType.dynamic);
+      final exercise = Exercise.create(name: 'Test', mode: ExerciseMode.reps);
 
       SharedPreferences.setMockInitialValues({
         'custom_exercises': jsonEncode([exercise.toJson()]),
@@ -387,10 +369,9 @@ void main() {
     });
 
     test('removing override restores default', () async {
-      // Add a custom "Pull Ups" that overrides default
       final customPullUps = Exercise.create(
         name: 'Pull Ups',
-        type: ExerciseType.dynamic,
+        mode: ExerciseMode.reps,
         defaultSets: 6,
       );
 
@@ -398,16 +379,13 @@ void main() {
         'custom_exercises': jsonEncode([customPullUps.toJson()]),
       });
 
-      // Verify custom is being used
       var pullUps = await ExerciseStorage.findByName('Pull Ups');
       expect(pullUps!.defaultSets, equals(6));
 
-      // Delete the custom override
       await ExerciseStorage.deleteExercise(customPullUps.id);
 
-      // Default should now be used
       pullUps = await ExerciseStorage.findByName('Pull Ups');
-      expect(pullUps!.defaultSets, equals(4)); // Default value
+      expect(pullUps!.defaultSets, equals(4));
       expect(pullUps.isCustom, isFalse);
     });
   });
@@ -429,17 +407,15 @@ void main() {
     });
 
     test('excludes specified ID', () async {
-      final exercise = Exercise.create(name: 'Test Exercise', type: ExerciseType.dynamic);
+      final exercise = Exercise.create(name: 'Test Exercise', mode: ExerciseMode.reps);
 
       SharedPreferences.setMockInitialValues({
         'custom_exercises': jsonEncode([exercise.toJson()]),
       });
 
-      // Without exclusion - should find it
       var exists = await ExerciseStorage.nameExists('Test Exercise');
       expect(exists, isTrue);
 
-      // With exclusion - should not find it
       exists = await ExerciseStorage.nameExists('Test Exercise', excludeId: exercise.id);
       expect(exists, isFalse);
     });
@@ -455,7 +431,7 @@ void main() {
     });
 
     test('includes custom exercise names', () async {
-      final custom = Exercise.create(name: 'Custom Name', type: ExerciseType.dynamic);
+      final custom = Exercise.create(name: 'Custom Name', mode: ExerciseMode.reps);
 
       SharedPreferences.setMockInitialValues({
         'custom_exercises': jsonEncode([custom.toJson()]),

@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/workout.dart';
-import '../models/exercise.dart';
 import '../services/workout_storage.dart';
-import '../services/exercise_storage.dart';
+import '../widgets/exercise_form.dart';
 
 class WorkoutsScreen extends StatefulWidget {
   const WorkoutsScreen({super.key});
@@ -22,7 +21,6 @@ class _WorkoutsScreenState extends State<WorkoutsScreen> {
   }
 
   Future<void> _loadWorkouts() async {
-    // Only load templates (not scheduled instances)
     final workouts = await WorkoutStorage.loadTemplates();
     setState(() {
       _workouts = workouts;
@@ -194,7 +192,7 @@ class _WorkoutCard extends StatelessWidget {
   }
 }
 
-/// Editor for workout templates (no recurrence - that's set in calendar)
+/// Editor for workout templates
 class WorkoutTemplateEditor extends StatefulWidget {
   final Workout? existingWorkout;
 
@@ -340,8 +338,8 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
       workout = Workout.create(
         name: name,
         icon: _selectedIcon,
-        startDate: DateTime.now(), // Will be overridden when scheduled
-        recurrenceType: RecurrenceType.oneOff, // Will be set in calendar
+        startDate: DateTime.now(),
+        recurrenceType: RecurrenceType.oneOff,
         exercises: _exercises,
       );
     }
@@ -422,9 +420,10 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
           const SizedBox(height: 8),
 
           if (_isAddingNew)
-            _PlannedExerciseForm(
+            ExerciseFormWidget(
               onSave: _saveNewExercise,
               onCancel: _cancelEdit,
+              showRestAfterExercise: true,
             ),
 
           ..._exercises.asMap().entries.map((entry) {
@@ -432,13 +431,19 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
             final exercise = entry.value;
             final isExpanded = _expandedExerciseIndex == index;
 
-            return _PlannedExerciseCard(
+            if (isExpanded) {
+              return ExerciseFormWidget(
+                exercise: exercise,
+                onSave: (e) => _updateExercise(index, e),
+                onCancel: _cancelEdit,
+                onDelete: () => _deleteExercise(index),
+                showRestAfterExercise: true,
+              );
+            }
+
+            return ExerciseCard(
               exercise: exercise,
-              isExpanded: isExpanded,
               onTap: () => setState(() => _expandedExerciseIndex = index),
-              onSave: (e) => _updateExercise(index, e),
-              onCancel: _cancelEdit,
-              onDelete: () => _deleteExercise(index),
             );
           }),
 
@@ -454,305 +459,6 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-class _PlannedExerciseForm extends StatefulWidget {
-  final PlannedExercise? exercise;
-  final Function(PlannedExercise) onSave;
-  final VoidCallback onCancel;
-
-  const _PlannedExerciseForm({
-    this.exercise,
-    required this.onSave,
-    required this.onCancel,
-  });
-
-  @override
-  State<_PlannedExerciseForm> createState() => _PlannedExerciseFormState();
-}
-
-class _PlannedExerciseFormState extends State<_PlannedExerciseForm> {
-  late TextEditingController _nameController;
-  late TextEditingController _setsController;
-  late TextEditingController _repsController;
-  late TextEditingController _weightController;
-  late ExerciseType _type;
-  List<Exercise> _allExercises = [];
-
-  @override
-  void initState() {
-    super.initState();
-    final e = widget.exercise;
-    final isEditing = e != null;
-
-    _nameController = TextEditingController(text: e?.exerciseName ?? '');
-    _setsController = TextEditingController(
-      text: isEditing ? e.targetSets.toString() : '',
-    );
-    _repsController = TextEditingController(
-      text: isEditing ? e.targetRepsOrDuration.toString() : '',
-    );
-    _weightController = TextEditingController(
-      text: isEditing ? e.targetWeight.toString() : '',
-    );
-    _type = e?.exerciseType ?? ExerciseType.dynamic;
-
-    _loadExercises();
-  }
-
-  Future<void> _loadExercises() async {
-    final exercises = await ExerciseStorage.getAllExercises();
-    setState(() => _allExercises = exercises);
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _setsController.dispose();
-    _repsController.dispose();
-    _weightController.dispose();
-    super.dispose();
-  }
-
-  void _onExerciseSelected(String name) async {
-    final exercise = await ExerciseStorage.findByName(name);
-    if (exercise != null) {
-      setState(() {
-        _type = exercise.type;
-        _setsController.text = exercise.defaultSets.toString();
-        _repsController.text = exercise.defaultRepsOrDuration.toString();
-        _weightController.text = exercise.defaultWeight.toString();
-      });
-    }
-  }
-
-  void _submit() async {
-    final name = _nameController.text.trim();
-    final sets = int.tryParse(_setsController.text);
-    final reps = int.tryParse(_repsController.text);
-    final weight = double.tryParse(_weightController.text) ?? 0;
-
-    if (name.isEmpty || sets == null || reps == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Fill in name, sets, and reps/duration')),
-      );
-      return;
-    }
-
-    // Check if this is a new unique exercise name
-    final existingExercise = await ExerciseStorage.findByName(name);
-    if (existingExercise == null) {
-      // New exercise - auto-add to exercises list with these values as defaults
-      final newExercise = Exercise.create(
-        name: name,
-        type: _type,
-        defaultSets: sets,
-        defaultRepsOrDuration: reps,
-        defaultWeight: weight,
-      );
-      await ExerciseStorage.addExercise(newExercise);
-    }
-
-    widget.onSave(PlannedExercise(
-      exerciseName: name,
-      exerciseType: _type,
-      targetSets: sets,
-      targetRepsOrDuration: reps,
-      targetWeight: weight,
-    ));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final isStatic = _type == ExerciseType.static;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Autocomplete<String>(
-              initialValue: TextEditingValue(text: _nameController.text),
-              optionsBuilder: (value) {
-                if (value.text.isEmpty) {
-                  return _allExercises.map((e) => e.name);
-                }
-                return _allExercises
-                    .map((e) => e.name)
-                    .where((n) => n.toLowerCase().contains(value.text.toLowerCase()));
-              },
-              onSelected: (name) {
-                _nameController.text = name;
-                _onExerciseSelected(name);
-              },
-              fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
-                return TextField(
-                  controller: controller,
-                  focusNode: focusNode,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    labelText: 'Exercise Name',
-                    isDense: true,
-                  ),
-                  onChanged: (value) => _nameController.text = value,
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                const Text('Type: '),
-                ChoiceChip(
-                  label: const Text('Dynamic'),
-                  selected: _type == ExerciseType.dynamic,
-                  onSelected: (s) {
-                    if (s) setState(() => _type = ExerciseType.dynamic);
-                  },
-                  visualDensity: VisualDensity.compact,
-                ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('Static'),
-                  selected: _type == ExerciseType.static,
-                  onSelected: (s) {
-                    if (s) setState(() => _type = ExerciseType.static);
-                  },
-                  visualDensity: VisualDensity.compact,
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _setsController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Sets',
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _repsController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: isStatic ? 'Seconds' : 'Reps',
-                      isDense: true,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _weightController,
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    decoration: const InputDecoration(
-                      labelText: 'Weight',
-                      isDense: true,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(onPressed: widget.onCancel, child: const Text('Cancel')),
-                const SizedBox(width: 8),
-                FilledButton(onPressed: _submit, child: const Text('Save')),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PlannedExerciseCard extends StatelessWidget {
-  final PlannedExercise exercise;
-  final bool isExpanded;
-  final VoidCallback onTap;
-  final Function(PlannedExercise) onSave;
-  final VoidCallback onCancel;
-  final VoidCallback onDelete;
-
-  const _PlannedExerciseCard({
-    required this.exercise,
-    required this.isExpanded,
-    required this.onTap,
-    required this.onSave,
-    required this.onCancel,
-    required this.onDelete,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (isExpanded) {
-      return Stack(
-        children: [
-          _PlannedExerciseForm(
-            exercise: exercise,
-            onSave: onSave,
-            onCancel: onCancel,
-          ),
-          Positioned(
-            top: 8,
-            right: 8,
-            child: IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: onDelete,
-            ),
-          ),
-        ],
-      );
-    }
-
-    final isStatic = exercise.exerciseType == ExerciseType.static;
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      exercise.exerciseName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      '${exercise.targetSets} sets × ${exercise.targetRepsOrDuration} ${exercise.repsOrDurationLabel}'
-                      '${exercise.targetWeight > 0 ? ' @ ${exercise.targetWeight}kg' : ''}',
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              Chip(
-                label: Text(isStatic ? 'Static' : 'Dynamic'),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

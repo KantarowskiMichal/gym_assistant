@@ -29,9 +29,9 @@ void main() {
       exercises: [
         PlannedExercise(
           exerciseName: 'Push Ups',
-          exerciseType: ExerciseType.dynamic,
+          mode: ExerciseMode.reps,
           targetSets: 4,
-          targetRepsOrDuration: 10,
+          targetReps: 10,
         ),
       ],
       scheduledDate: scheduledDate ?? DateTime(2025, 1, 15),
@@ -110,10 +110,9 @@ void main() {
         exercises: [
           PlannedExercise(
             exerciseName: 'Swimming',
-            exerciseType: ExerciseType.dynamic,
+            mode: ExerciseMode.reps,
             targetSets: 10,
-            targetRepsOrDuration: 100,
-            targetWeight: 0,
+            targetReps: 100,
           ),
         ],
         scheduledDate: DateTime(2025, 2, 20),
@@ -142,9 +141,9 @@ void main() {
         exercises: [
           PlannedExercise(
             exerciseName: 'Updated Exercise',
-            exerciseType: ExerciseType.static,
+            mode: ExerciseMode.static,
             targetSets: 3,
-            targetRepsOrDuration: 60,
+            targetSeconds: 60,
           ),
         ],
         completedAt: DateTime(2025, 1, 15, 15, 0),
@@ -267,14 +266,12 @@ void main() {
         'completed_workouts': jsonEncode([completed.toJson()]),
       });
 
-      // Different scheduled workout ID
       var found = await CompletedWorkoutStorage.findCompleted(
         'different_id',
         DateTime(2025, 3, 10),
       );
       expect(found, isNull);
 
-      // Different date
       found = await CompletedWorkoutStorage.findCompleted(
         'scheduled_abc',
         DateTime(2025, 3, 11),
@@ -285,14 +282,13 @@ void main() {
     test('date comparison ignores time component', () async {
       final completed = createTestCompleted(
         scheduledWorkoutId: 'scheduled_id',
-        scheduledDate: DateTime(2025, 3, 15), // No time component
+        scheduledDate: DateTime(2025, 3, 15),
       );
 
       SharedPreferences.setMockInitialValues({
         'completed_workouts': jsonEncode([completed.toJson()]),
       });
 
-      // Query with time component - should still find it
       final found = await CompletedWorkoutStorage.findCompleted(
         'scheduled_id',
         DateTime(2025, 3, 15, 14, 30, 45),
@@ -376,7 +372,6 @@ void main() {
         'completed_workouts': jsonEncode([completed.toJson()]),
       });
 
-      // Query with different time
       final workouts = await CompletedWorkoutStorage.getCompletedForDate(
         DateTime(2025, 3, 20, 23, 59, 59),
       );
@@ -445,7 +440,7 @@ void main() {
 
       final isComplete = await CompletedWorkoutStorage.isCompleted(
         'test_scheduled',
-        DateTime(2025, 4, 2), // Wrong date
+        DateTime(2025, 4, 2),
       );
 
       expect(isComplete, isFalse);
@@ -462,7 +457,7 @@ void main() {
       });
 
       final isComplete = await CompletedWorkoutStorage.isCompleted(
-        'different_id', // Wrong ID
+        'different_id',
         DateTime(2025, 4, 1),
       );
 
@@ -472,9 +467,6 @@ void main() {
 
   group('Data persistence', () {
     test('completed workouts persist independently of templates', () async {
-      // This documents that completed workouts are stored separately
-      // and survive template/scheduled workout deletion
-
       final completed = createTestCompleted(
         scheduledWorkoutId: 'deleted_scheduled_workout',
         workoutName: 'Workout That Was Deleted',
@@ -482,8 +474,6 @@ void main() {
 
       await CompletedWorkoutStorage.addCompleted(completed);
 
-      // Even though the scheduledWorkoutId might not exist anymore,
-      // the completed record is preserved
       final workouts = await CompletedWorkoutStorage.loadAll();
       expect(workouts.length, equals(1));
       expect(workouts.first.workoutName, equals('Workout That Was Deleted'));
