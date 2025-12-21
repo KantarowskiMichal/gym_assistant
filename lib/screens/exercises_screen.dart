@@ -25,7 +25,9 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
 
   Future<void> _loadExercises() async {
     final exercises = await ExerciseStorage.loadCustomExercises();
-    exercises.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    exercises.sort(
+      (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
     setState(() {
       _exercises = exercises;
       _isLoading = false;
@@ -65,7 +67,9 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     final success = await ExerciseStorage.addExercise(exercise);
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You already have a custom exercise with this name')),
+        const SnackBar(
+          content: Text('You already have a custom exercise with this name'),
+        ),
       );
       return;
     }
@@ -73,7 +77,10 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     _loadExercises();
   }
 
-  Future<void> _updateExercise(Exercise original, PlannedExercise planned) async {
+  Future<void> _updateExercise(
+    Exercise original,
+    PlannedExercise planned,
+  ) async {
     final updated = original.copyWith(
       name: planned.exerciseName,
       mode: planned.mode,
@@ -91,7 +98,11 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
     final success = await ExerciseStorage.updateExercise(updated);
     if (!success && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You already have another custom exercise with this name')),
+        const SnackBar(
+          content: Text(
+            'You already have another custom exercise with this name',
+          ),
+        ),
       );
       return;
     }
@@ -117,18 +128,31 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
       exerciseName: exercise.name,
       mode: exercise.mode,
       targetSets: exercise.defaultSets,
-      targetReps: exercise.mode == ExerciseMode.reps ? exercise.defaultReps : null,
-      targetRepsPerSet: exercise.mode == ExerciseMode.variableSets
-          ? (exercise.defaultRepsPerSet ?? List.filled(exercise.defaultSets, exercise.defaultReps))
+      targetReps: exercise.mode == ExerciseMode.reps
+          ? exercise.defaultReps
           : null,
-      pyramidTop: exercise.mode == ExerciseMode.pyramid ? exercise.defaultPyramidTop : null,
-      targetSeconds: exercise.mode == ExerciseMode.static ? exercise.defaultSeconds : null,
+      targetRepsPerSet: exercise.mode == ExerciseMode.variableSets
+          ? (exercise.defaultRepsPerSet ??
+                List.filled(exercise.defaultSets, exercise.defaultReps))
+          : null,
+      pyramidTop: exercise.mode == ExerciseMode.pyramid
+          ? exercise.defaultPyramidTop
+          : null,
+      targetSeconds: exercise.mode == ExerciseMode.static
+          ? exercise.defaultSeconds
+          : null,
       targetWeight: exercise.defaultWeight,
-      restBetweenSets: exercise.mode != ExerciseMode.variableSets ? exercise.defaultRestBetweenSets : null,
+      restBetweenSets: exercise.mode != ExerciseMode.variableSets
+          ? exercise.defaultRestBetweenSets
+          : null,
       restBetweenSetsPerSet: exercise.mode == ExerciseMode.variableSets
-          ? (exercise.defaultRestBetweenSetsPerSet ?? (exercise.defaultRestBetweenSets != null
-              ? List.filled(exercise.defaultSets, exercise.defaultRestBetweenSets!)
-              : null))
+          ? (exercise.defaultRestBetweenSetsPerSet ??
+                (exercise.defaultRestBetweenSets != null
+                    ? List.filled(
+                        exercise.defaultSets,
+                        exercise.defaultRestBetweenSets!,
+                      )
+                    : null))
           : null,
       restAfterExercise: exercise.defaultRestAfterExercise,
     );
@@ -136,58 +160,77 @@ class _ExercisesScreenState extends State<ExercisesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Exercises'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Text(
-                  'Define exercises with default values. These will be available when creating workouts.',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-                const SizedBox(height: 16),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          _buildHeaderText(),
+          const SizedBox(height: 16),
+          if (_isAddingNew) _buildNewExerciseForm(),
+          ..._exercises.map(_buildExerciseWidget),
+        ],
+      ),
+      floatingActionButton: _buildFloatingActionButton(),
+    );
+  }
 
-                if (_isAddingNew)
-                  ExerciseFormWidget(
-                    onSave: _saveNewExercise,
-                    onCancel: _cancelEdit,
-                    autoAddNewExercises: false,
-                    showRestAfterExercise: true,
-                  ),
+  Widget _buildHeaderText() {
+    return Text(
+      'Define exercises with default values. These will be available when creating workouts.',
+      style: TextStyle(color: Colors.grey[600]),
+    );
+  }
 
-                ..._exercises.map((exercise) {
-                  final isExpanded = _expandedExerciseId == exercise.id;
+  Widget _buildNewExerciseForm() {
+    return ExerciseFormWidget(
+      onSave: _saveNewExercise,
+      onCancel: _cancelEdit,
+      autoAddNewExercises: false,
+      showRestAfterExercise: true,
+    );
+  }
 
-                  if (isExpanded) {
-                    return ExerciseFormWidget(
-                      exercise: _exerciseToPlanned(exercise),
-                      onSave: (p) => _updateExercise(exercise, p),
-                      onCancel: _cancelEdit,
-                      onDelete: exercise.isCustom ? () => _deleteExercise(exercise) : null,
-                      autoAddNewExercises: false,
-                      showRestAfterExercise: true,
-                    );
-                  }
+  Widget _buildExerciseWidget(Exercise exercise) {
+    final isExpanded = _expandedExerciseId == exercise.id;
 
-                  return _ExerciseListCard(
-                    exercise: exercise,
-                    onTap: () => setState(() => _expandedExerciseId = exercise.id),
-                  );
-                }),
-              ],
-            ),
-      floatingActionButton: _isAddingNew
-          ? null
-          : FloatingActionButton(
-              onPressed: _startAddingNew,
-              tooltip: 'Add Exercise',
-              child: const Icon(Icons.add),
-            ),
+    if (isExpanded) {
+      return _buildExpandedExerciseForm(exercise);
+    }
+
+    return _ExerciseListCard(
+      exercise: exercise,
+      onTap: () => setState(() => _expandedExerciseId = exercise.id),
+    );
+  }
+
+  Widget _buildExpandedExerciseForm(Exercise exercise) {
+    return ExerciseFormWidget(
+      exercise: _exerciseToPlanned(exercise),
+      onSave: (p) => _updateExercise(exercise, p),
+      onCancel: _cancelEdit,
+      onDelete: exercise.isCustom ? () => _deleteExercise(exercise) : null,
+      autoAddNewExercises: false,
+      showRestAfterExercise: true,
+    );
+  }
+
+  Widget? _buildFloatingActionButton() {
+    if (_isAddingNew) return null;
+
+    return FloatingActionButton(
+      onPressed: _startAddingNew,
+      tooltip: 'Add Exercise',
+      child: const Icon(Icons.add),
     );
   }
 }
@@ -196,10 +239,7 @@ class _ExerciseListCard extends StatelessWidget {
   final Exercise exercise;
   final VoidCallback onTap;
 
-  const _ExerciseListCard({
-    required this.exercise,
-    required this.onTap,
-  });
+  const _ExerciseListCard({required this.exercise, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -212,49 +252,8 @@ class _ExerciseListCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          exercise.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        if (!exercise.isCustom) ...[
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[300],
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: const Text(
-                              'Default',
-                              style: TextStyle(fontSize: 10),
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      _buildSummary(),
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              Chip(
-                label: Text(exercise.modeLabel),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                backgroundColor: _getModeColor(exercise.mode),
-              ),
+              Expanded(child: _buildExerciseInfo()),
+              _buildModeChip(),
             ],
           ),
         ),
@@ -262,8 +261,63 @@ class _ExerciseListCard extends StatelessWidget {
     );
   }
 
+  Widget _buildExerciseInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildNameRow(),
+        const SizedBox(height: 4),
+        _buildSummaryText(),
+      ],
+    );
+  }
+
+  Widget _buildNameRow() {
+    return Row(
+      children: [
+        Text(
+          exercise.name,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+        ),
+        if (!exercise.isCustom) ...[
+          const SizedBox(width: 8),
+          _buildDefaultBadge(),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildDefaultBadge() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: Colors.grey[300],
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: const Text('Default', style: TextStyle(fontSize: 10)),
+    );
+  }
+
+  Widget _buildSummaryText() {
+    return Text(
+      _buildSummary(),
+      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+    );
+  }
+
+  Widget _buildModeChip() {
+    return Chip(
+      label: Text(exercise.modeLabel),
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      backgroundColor: _getModeColor(exercise.mode),
+    );
+  }
+
   String _buildSummary() {
-    final weightSuffix = exercise.defaultWeight > 0 ? ' @ ${exercise.defaultWeight}kg' : '';
+    final weightSuffix = exercise.defaultWeight > 0
+        ? ' @ ${exercise.defaultWeight}kg'
+        : '';
     return '${exercise.defaultsSummary}$weightSuffix';
   }
 

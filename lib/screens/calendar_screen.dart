@@ -311,21 +311,27 @@ class _CalendarScreenState extends State<CalendarScreen> {
         title: const Text('Calendar'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                _buildCalendarHeader(),
-                _buildCalendarGrid(),
-                const Divider(),
-                Expanded(child: _buildSelectedDayWorkouts()),
-              ],
-            ),
+      body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: _scheduleWorkout,
         tooltip: 'Schedule Workout',
         child: const Icon(Icons.add),
       ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Column(
+      children: [
+        _buildCalendarHeader(),
+        _buildCalendarGrid(),
+        const Divider(),
+        Expanded(child: _buildSelectedDayWorkouts()),
+      ],
     );
   }
 
@@ -395,35 +401,24 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final hasCompleted = _hasAnyCompletedForDate(date);
     final allCompleted = workouts.isNotEmpty &&
         workouts.every((w) => _isCompletedForDate(w, date));
-    final isSelected = _selectedDate != null &&
-        date.year == _selectedDate!.year &&
-        date.month == _selectedDate!.month &&
-        date.day == _selectedDate!.day;
-    final isToday = date.year == DateTime.now().year &&
-        date.month == DateTime.now().month &&
-        date.day == DateTime.now().day;
+    final isSelected = _isSameDate(date, _selectedDate);
+    final isToday = _isSameDate(date, DateTime.now());
 
     return GestureDetector(
       onTap: () => _selectDate(date),
       child: Container(
         margin: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-          color: _getDayCellColor(isSelected, allCompleted, isToday, workouts.isNotEmpty),
-          borderRadius: BorderRadius.circular(8),
-          border: _getDayCellBorder(isSelected, allCompleted, workouts.isNotEmpty),
+        decoration: _buildDayCellDecoration(
+          isSelected: isSelected,
+          allCompleted: allCompleted,
+          isToday: isToday,
+          hasWorkouts: workouts.isNotEmpty,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              '${dayOffset + 1}',
-              style: TextStyle(
-                color: isSelected ? Colors.white : null,
-                fontWeight: isToday ? FontWeight.bold : null,
-                fontSize: 12,
-              ),
-            ),
+            _buildDayNumber(dayOffset, isSelected, isToday),
             if (workouts.isNotEmpty)
               _buildDayCellWorkoutIcons(
                 workouts: workouts,
@@ -434,6 +429,37 @@ class _CalendarScreenState extends State<CalendarScreen> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  bool _isSameDate(DateTime date1, DateTime? date2) {
+    if (date2 == null) return false;
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  BoxDecoration _buildDayCellDecoration({
+    required bool isSelected,
+    required bool allCompleted,
+    required bool isToday,
+    required bool hasWorkouts,
+  }) {
+    return BoxDecoration(
+      color: _getDayCellColor(isSelected, allCompleted, isToday, hasWorkouts),
+      borderRadius: BorderRadius.circular(8),
+      border: _getDayCellBorder(isSelected, allCompleted, hasWorkouts),
+    );
+  }
+
+  Widget _buildDayNumber(int dayOffset, bool isSelected, bool isToday) {
+    return Text(
+      '${dayOffset + 1}',
+      style: TextStyle(
+        color: isSelected ? Colors.white : null,
+        fontWeight: isToday ? FontWeight.bold : null,
+        fontSize: 12,
       ),
     );
   }
@@ -558,13 +584,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: isCompleted
-          ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
-          : null,
+      color: _getWorkoutCardColor(isCompleted),
       child: InkWell(
-        onTap: isOrphaned
-            ? () => _openCompleteDialog(workout, _selectedDate!)
-            : () => _editWorkout(workout),
+        onTap: _getWorkoutCardTapHandler(workout, isOrphaned),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -574,15 +596,25 @@ class _CalendarScreenState extends State<CalendarScreen> {
               _buildWorkoutCardHeader(workout, isCompleted, recurrenceText),
               const SizedBox(height: 8),
               _buildExerciseCountText(exercises.length),
-              if (exercises.isNotEmpty)
-                _buildExerciseNamesText(exercises),
-              if (isCompleted)
-                _buildCompletedBadge(),
+              if (exercises.isNotEmpty) _buildExerciseNamesText(exercises),
+              if (isCompleted) _buildCompletedBadge(),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Color? _getWorkoutCardColor(bool isCompleted) {
+    return isCompleted
+        ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
+        : null;
+  }
+
+  VoidCallback _getWorkoutCardTapHandler(Workout workout, bool isOrphaned) {
+    return isOrphaned
+        ? () => _openCompleteDialog(workout, _selectedDate!)
+        : () => _editWorkout(workout);
   }
 
   String _getRecurrenceText(Workout workout, bool isOrphaned) {
@@ -601,23 +633,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
         const SizedBox(width: 12),
         _buildWorkoutIconBox(workout, isCompleted),
         const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            workout.name,
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              decoration: isCompleted ? TextDecoration.lineThrough : null,
-              color: isCompleted ? Colors.grey[600] : null,
-            ),
-          ),
-        ),
-        Chip(
-          label: Text(recurrenceText),
-          visualDensity: VisualDensity.compact,
-        ),
+        Expanded(child: _buildWorkoutName(workout, isCompleted)),
+        _buildRecurrenceChip(recurrenceText),
         _buildCardActionButton(workout, isCompleted),
       ],
+    );
+  }
+
+  Widget _buildWorkoutName(Workout workout, bool isCompleted) {
+    return Text(
+      workout.name,
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        decoration: isCompleted ? TextDecoration.lineThrough : null,
+        color: isCompleted ? Colors.grey[600] : null,
+      ),
+    );
+  }
+
+  Widget _buildRecurrenceChip(String recurrenceText) {
+    return Chip(
+      label: Text(recurrenceText),
+      visualDensity: VisualDensity.compact,
     );
   }
 
@@ -627,19 +665,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
       child: Container(
         width: 32,
         height: 32,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: isCompleted
-              ? Colors.green
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          border: isCompleted
-              ? null
-              : Border.all(color: Theme.of(context).colorScheme.outline, width: 2),
-        ),
+        decoration: _getCheckboxDecoration(isCompleted),
         child: isCompleted
             ? const Icon(Icons.check, color: Colors.white, size: 20)
             : null,
       ),
+    );
+  }
+
+  BoxDecoration _getCheckboxDecoration(bool isCompleted) {
+    return BoxDecoration(
+      shape: BoxShape.circle,
+      color: isCompleted
+          ? Colors.green
+          : Theme.of(context).colorScheme.surfaceContainerHighest,
+      border: isCompleted
+          ? null
+          : Border.all(color: Theme.of(context).colorScheme.outline, width: 2),
     );
   }
 
@@ -796,77 +838,9 @@ class _ScheduleWorkoutDialogState extends State<_ScheduleWorkoutDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Select Workout:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            ...widget.workouts.map((workout) {
-              final isSelected = _selectedWorkout?.id == workout.id;
-              return ListTile(
-                leading: Icon(
-                  isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
-                  color: isSelected ? Theme.of(context).colorScheme.primary : null,
-                ),
-                title: Row(
-                  children: [
-                    Icon(workout.icon, size: 20),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(workout.name)),
-                  ],
-                ),
-                subtitle: Text('${workout.exercises.length} exercises'),
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                onTap: () => setState(() => _selectedWorkout = workout),
-              );
-            }),
+            _buildWorkoutSelector(),
             const SizedBox(height: 16),
-            const Text('Recurrence:', style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              children: [
-                ChoiceChip(
-                  label: const Text('One-off'),
-                  selected: _recurrenceType == RecurrenceType.oneOff,
-                  onSelected: (s) {
-                    if (s) setState(() => _recurrenceType = RecurrenceType.oneOff);
-                  },
-                ),
-                ChoiceChip(
-                  label: const Text('Weekly'),
-                  selected: _recurrenceType == RecurrenceType.weekly,
-                  onSelected: (s) {
-                    if (s) setState(() => _recurrenceType = RecurrenceType.weekly);
-                  },
-                ),
-                ChoiceChip(
-                  label: const Text('Every X days'),
-                  selected: _recurrenceType == RecurrenceType.offset,
-                  onSelected: (s) {
-                    if (s) setState(() => _recurrenceType = RecurrenceType.offset);
-                  },
-                ),
-              ],
-            ),
-            if (_recurrenceType == RecurrenceType.offset) ...[
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  const Text('Repeat every '),
-                  SizedBox(
-                    width: 50,
-                    child: TextField(
-                      controller: _offsetController,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [NonNegativeIntFormatter()],
-                      textAlign: TextAlign.center,
-                      onTap: _onOffsetTap,
-                      decoration: const InputDecoration(isDense: true),
-                    ),
-                  ),
-                  const Text(' days'),
-                ],
-              ),
-            ],
+            _buildRecurrenceSelector(),
           ],
         ),
       ),
@@ -880,6 +854,102 @@ class _ScheduleWorkoutDialogState extends State<_ScheduleWorkoutDialog> {
           child: const Text('Schedule'),
         ),
       ],
+    );
+  }
+
+  Widget _buildWorkoutSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Select Workout:', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        ...widget.workouts.map(_buildWorkoutOption),
+      ],
+    );
+  }
+
+  Widget _buildWorkoutOption(Workout workout) {
+    final isSelected = _selectedWorkout?.id == workout.id;
+    return ListTile(
+      leading: _buildRadioIcon(isSelected),
+      title: _buildWorkoutTitle(workout),
+      subtitle: Text('${workout.exercises.length} exercises'),
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      onTap: () => setState(() => _selectedWorkout = workout),
+    );
+  }
+
+  Widget _buildRadioIcon(bool isSelected) {
+    return Icon(
+      isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+      color: isSelected ? Theme.of(context).colorScheme.primary : null,
+    );
+  }
+
+  Widget _buildWorkoutTitle(Workout workout) {
+    return Row(
+      children: [
+        Icon(workout.icon, size: 20),
+        const SizedBox(width: 8),
+        Expanded(child: Text(workout.name)),
+      ],
+    );
+  }
+
+  Widget _buildRecurrenceSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Recurrence:', style: TextStyle(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        _buildRecurrenceChips(),
+        if (_recurrenceType == RecurrenceType.offset) _buildOffsetInput(),
+      ],
+    );
+  }
+
+  Widget _buildRecurrenceChips() {
+    return Wrap(
+      spacing: 8,
+      children: [
+        _buildRecurrenceChip('One-off', RecurrenceType.oneOff),
+        _buildRecurrenceChip('Weekly', RecurrenceType.weekly),
+        _buildRecurrenceChip('Every X days', RecurrenceType.offset),
+      ],
+    );
+  }
+
+  Widget _buildRecurrenceChip(String label, RecurrenceType type) {
+    return ChoiceChip(
+      label: Text(label),
+      selected: _recurrenceType == type,
+      onSelected: (s) {
+        if (s) setState(() => _recurrenceType = type);
+      },
+    );
+  }
+
+  Widget _buildOffsetInput() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Row(
+        children: [
+          const Text('Repeat every '),
+          SizedBox(
+            width: 50,
+            child: TextField(
+              controller: _offsetController,
+              keyboardType: TextInputType.number,
+              inputFormatters: [NonNegativeIntFormatter()],
+              textAlign: TextAlign.center,
+              onTap: _onOffsetTap,
+              decoration: const InputDecoration(isDense: true),
+            ),
+          ),
+          const Text(' days'),
+        ],
+      ),
     );
   }
 }

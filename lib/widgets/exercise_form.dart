@@ -778,46 +778,73 @@ class ExerciseCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      exercise.exerciseName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      exercise.displayString,
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    ),
-                    if (exercise.restDisplayString.isNotEmpty)
-                      Text(
-                        'Rest: ${exercise.restDisplayString}',
-                        style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                      ),
-                    if (exercise.restAfterExercise != null && exercise.restAfterExercise! > 0)
-                      Text(
-                        'Then rest: ${formatRestTime(exercise.restAfterExercise!)}',
-                        style: TextStyle(color: Colors.blue[400], fontSize: 11),
-                      ),
-                  ],
-                ),
-              ),
-              Chip(
-                label: Text(exercise.modeLabel),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-              ),
-              if (onDelete != null)
-                IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red, size: 20),
-                  onPressed: onDelete,
-                  visualDensity: VisualDensity.compact,
-                ),
+              Expanded(child: _buildExerciseInfo()),
+              _buildModeChip(),
+              if (onDelete != null) _buildDeleteButton(),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildExerciseInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildExerciseName(),
+        _buildDisplayString(),
+        if (exercise.restDisplayString.isNotEmpty) _buildRestBetweenSets(),
+        if (_hasRestAfterExercise()) _buildRestAfterExercise(),
+      ],
+    );
+  }
+
+  Widget _buildExerciseName() {
+    return Text(
+      exercise.exerciseName,
+      style: const TextStyle(fontWeight: FontWeight.bold),
+    );
+  }
+
+  Widget _buildDisplayString() {
+    return Text(
+      exercise.displayString,
+      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+    );
+  }
+
+  Widget _buildRestBetweenSets() {
+    return Text(
+      'Rest: ${exercise.restDisplayString}',
+      style: TextStyle(color: Colors.grey[500], fontSize: 11),
+    );
+  }
+
+  bool _hasRestAfterExercise() {
+    return exercise.restAfterExercise != null && exercise.restAfterExercise! > 0;
+  }
+
+  Widget _buildRestAfterExercise() {
+    return Text(
+      'Then rest: ${formatRestTime(exercise.restAfterExercise!)}',
+      style: TextStyle(color: Colors.blue[400], fontSize: 11),
+    );
+  }
+
+  Widget _buildModeChip() {
+    return Chip(
+      label: Text(exercise.modeLabel),
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+    );
+  }
+
+  Widget _buildDeleteButton() {
+    return IconButton(
+      icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+      onPressed: onDelete,
+      visualDensity: VisualDensity.compact,
     );
   }
 }

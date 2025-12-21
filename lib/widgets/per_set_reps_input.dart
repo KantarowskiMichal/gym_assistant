@@ -186,63 +186,89 @@ class PerSetRepsInputState extends State<PerSetRepsInput> {
   @override
   Widget build(BuildContext context) {
     if (_controllers.isEmpty) {
-      return Text(
-        'Enter sets first',
-        style: TextStyle(
-          fontSize: 12,
-          color: Colors.grey[400],
-          fontStyle: FontStyle.italic,
-        ),
-      );
+      return _buildEmptyState();
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          '${widget.label} per set:',
-          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-        ),
+        _buildLabel(),
         const SizedBox(height: 4),
-        ...List.generate(_controllers.length, (index) {
-          final isAutoFilled = _autoFilledIndices.contains(index) &&
-                               !_userEditedIndices.contains(index);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 50,
-                  child: Text(
-                    'Set ${index + 1}:',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                Expanded(
-                  child: TextField(
-                    controller: _controllers[index],
-                    focusNode: _focusNodes[index],
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [NonNegativeIntFormatter()],
-                    decoration: InputDecoration(
-                      hintText: widget.label,
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 8,
-                      ),
-                      // Visual hint for auto-filled fields
-                      fillColor: isAutoFilled ? Colors.grey[100] : null,
-                      filled: isAutoFilled,
-                    ),
-                    onChanged: (v) => _onFieldChanged(index, v),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
+        ..._buildSetFields(),
       ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Text(
+      'Enter sets first',
+      style: TextStyle(
+        fontSize: 12,
+        color: Colors.grey[400],
+        fontStyle: FontStyle.italic,
+      ),
+    );
+  }
+
+  Widget _buildLabel() {
+    return Text(
+      '${widget.label} per set:',
+      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+    );
+  }
+
+  List<Widget> _buildSetFields() {
+    return List.generate(_controllers.length, (index) {
+      return _buildSetField(index);
+    });
+  }
+
+  Widget _buildSetField(int index) {
+    final isAutoFilled = _isAutoFilled(index);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          _buildSetLabel(index),
+          Expanded(child: _buildTextField(index, isAutoFilled)),
+        ],
+      ),
+    );
+  }
+
+  bool _isAutoFilled(int index) {
+    return _autoFilledIndices.contains(index) &&
+        !_userEditedIndices.contains(index);
+  }
+
+  Widget _buildSetLabel(int index) {
+    return SizedBox(
+      width: 50,
+      child: Text(
+        'Set ${index + 1}:',
+        style: const TextStyle(fontSize: 12),
+      ),
+    );
+  }
+
+  Widget _buildTextField(int index, bool isAutoFilled) {
+    return TextField(
+      controller: _controllers[index],
+      focusNode: _focusNodes[index],
+      keyboardType: TextInputType.number,
+      inputFormatters: [NonNegativeIntFormatter()],
+      decoration: _buildFieldDecoration(isAutoFilled),
+      onChanged: (v) => _onFieldChanged(index, v),
+    );
+  }
+
+  InputDecoration _buildFieldDecoration(bool isAutoFilled) {
+    return InputDecoration(
+      hintText: widget.label,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      fillColor: isAutoFilled ? Colors.grey[100] : null,
+      filled: isAutoFilled,
     );
   }
 

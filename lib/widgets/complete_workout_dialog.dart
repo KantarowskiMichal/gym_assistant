@@ -122,39 +122,49 @@ class _CompleteWorkoutDialogState extends State<CompleteWorkoutDialog> {
   Widget _buildHeader() {
     return Row(
       children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            widget.workout.icon,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-        ),
+        _buildWorkoutIcon(),
         const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _isEditing ? 'Edit Completed Workout' : 'Complete Workout',
-                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              Text(
-                widget.workout.name,
-                style: TextStyle(color: Colors.grey[600]),
-              ),
-            ],
-          ),
+        Expanded(child: _buildHeaderText()),
+        _buildCloseButton(),
+      ],
+    );
+  }
+
+  Widget _buildWorkoutIcon() {
+    return Container(
+      width: 40,
+      height: 40,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(
+        widget.workout.icon,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+
+  Widget _buildHeaderText() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _isEditing ? 'Edit Completed Workout' : 'Complete Workout',
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
-        IconButton(
-          icon: const Icon(Icons.close),
-          onPressed: () => Navigator.pop(context),
+        Text(
+          widget.workout.name,
+          style: TextStyle(color: Colors.grey[600]),
         ),
       ],
+    );
+  }
+
+  Widget _buildCloseButton() {
+    return IconButton(
+      icon: const Icon(Icons.close),
+      onPressed: () => Navigator.pop(context),
     );
   }
 
@@ -275,56 +285,76 @@ class _CompactExerciseCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      exercise.exerciseName,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      exercise.displayString,
-                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    ),
-                    if (exercise.restDisplayString.isNotEmpty)
-                      Text(
-                        'Rest: ${exercise.restDisplayString}',
-                        style: TextStyle(color: Colors.grey[500], fontSize: 11),
-                      ),
-                    if (exercise.restAfterExercise != null &&
-                        exercise.restAfterExercise! > 0)
-                      Text(
-                        'Then rest: ${formatRestTime(exercise.restAfterExercise!)}',
-                        style: TextStyle(color: Colors.blue[400], fontSize: 11),
-                      ),
-                  ],
-                ),
-              ),
-              Chip(
-                label: Text(
-                  exercise.modeLabel,
-                  style: const TextStyle(fontSize: 10),
-                ),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                backgroundColor: _getModeColor(exercise.mode),
-              ),
-              IconButton(
-                icon: const Icon(
-                  Icons.remove_circle_outline,
-                  color: Colors.red,
-                  size: 20,
-                ),
-                onPressed: onRemove,
-                visualDensity: VisualDensity.compact,
-                tooltip: 'Remove exercise',
-              ),
+              Expanded(child: _buildExerciseInfo()),
+              _buildModeChip(),
+              _buildRemoveButton(),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildExerciseInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildExerciseName(),
+        const SizedBox(height: 2),
+        _buildDisplayString(),
+        if (exercise.restDisplayString.isNotEmpty) _buildRestBetweenSets(),
+        if (_hasRestAfterExercise()) _buildRestAfterExercise(),
+      ],
+    );
+  }
+
+  Widget _buildExerciseName() {
+    return Text(
+      exercise.exerciseName,
+      style: const TextStyle(fontWeight: FontWeight.bold),
+    );
+  }
+
+  Widget _buildDisplayString() {
+    return Text(
+      exercise.displayString,
+      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+    );
+  }
+
+  Widget _buildRestBetweenSets() {
+    return Text(
+      'Rest: ${exercise.restDisplayString}',
+      style: TextStyle(color: Colors.grey[500], fontSize: 11),
+    );
+  }
+
+  bool _hasRestAfterExercise() {
+    return exercise.restAfterExercise != null && exercise.restAfterExercise! > 0;
+  }
+
+  Widget _buildRestAfterExercise() {
+    return Text(
+      'Then rest: ${formatRestTime(exercise.restAfterExercise!)}',
+      style: TextStyle(color: Colors.blue[400], fontSize: 11),
+    );
+  }
+
+  Widget _buildModeChip() {
+    return Chip(
+      label: Text(exercise.modeLabel, style: const TextStyle(fontSize: 10)),
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      backgroundColor: _getModeColor(exercise.mode),
+    );
+  }
+
+  Widget _buildRemoveButton() {
+    return IconButton(
+      icon: const Icon(Icons.remove_circle_outline, color: Colors.red, size: 20),
+      onPressed: onRemove,
+      visualDensity: VisualDensity.compact,
+      tooltip: 'Remove exercise',
     );
   }
 

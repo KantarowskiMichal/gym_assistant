@@ -320,94 +320,131 @@ class PerSetRestInputState extends State<PerSetRestInput> {
   @override
   Widget build(BuildContext context) {
     if (_minutesControllers.isEmpty) {
-      return Text(
-        'Enter sets first',
-        style: TextStyle(
-          fontSize: 12,
-          color: Colors.grey[400],
-          fontStyle: FontStyle.italic,
-        ),
-      );
+      return _buildEmptyState();
     }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Rest per set:',
-          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-        ),
+        _buildLabel(),
         const SizedBox(height: 4),
-        ...List.generate(_minutesControllers.length, (index) {
-          final minutesAutoFilled = _minutesAutoFilledIndices.contains(index) &&
-                                    !_userEditedIndices.contains(index);
-          final secondsAutoFilled = _secondsAutoFilledIndices.contains(index) &&
-                                    !_userEditedIndices.contains(index);
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 50,
-                  child: Text(
-                    'Set ${index + 1}:',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                ),
-                SizedBox(
-                  width: 50,
-                  child: TextField(
-                    controller: _minutesControllers[index],
-                    focusNode: _minutesFocusNodes[index],
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [NonNegativeIntFormatter()],
-                    decoration: InputDecoration(
-                      hintText: 'Min',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 8,
-                      ),
-                      fillColor: minutesAutoFilled ? Colors.grey[100] : null,
-                      filled: minutesAutoFilled,
-                    ),
-                    onChanged: (_) => _onMinutesFieldChanged(index),
-                  ),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 2),
-                  child: Text(':'),
-                ),
-                SizedBox(
-                  width: 50,
-                  child: TextField(
-                    controller: _secondsControllers[index],
-                    focusNode: _secondsFocusNodes[index],
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [NonNegativeIntFormatter()],
-                    decoration: InputDecoration(
-                      hintText: 'Sec',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 8,
-                      ),
-                      fillColor: secondsAutoFilled ? Colors.grey[100] : null,
-                      filled: secondsAutoFilled,
-                    ),
-                    onChanged: (_) => _onSecondsFieldChanged(index),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  formatRestTime(_getTotalSecondsAt(index)),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                ),
-              ],
-            ),
-          );
-        }),
+        ..._buildSetFields(),
       ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Text(
+      'Enter sets first',
+      style: TextStyle(
+        fontSize: 12,
+        color: Colors.grey[400],
+        fontStyle: FontStyle.italic,
+      ),
+    );
+  }
+
+  Widget _buildLabel() {
+    return Text(
+      'Rest per set:',
+      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+    );
+  }
+
+  List<Widget> _buildSetFields() {
+    return List.generate(_minutesControllers.length, (index) {
+      return _buildSetField(index);
+    });
+  }
+
+  Widget _buildSetField(int index) {
+    final minutesAutoFilled = _isMinutesAutoFilled(index);
+    final secondsAutoFilled = _isSecondsAutoFilled(index);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          _buildSetLabel(index),
+          _buildMinutesField(index, minutesAutoFilled),
+          _buildTimeSeparator(),
+          _buildSecondsField(index, secondsAutoFilled),
+          const SizedBox(width: 8),
+          _buildTotalTimeDisplay(index),
+        ],
+      ),
+    );
+  }
+
+  bool _isMinutesAutoFilled(int index) {
+    return _minutesAutoFilledIndices.contains(index) &&
+        !_userEditedIndices.contains(index);
+  }
+
+  bool _isSecondsAutoFilled(int index) {
+    return _secondsAutoFilledIndices.contains(index) &&
+        !_userEditedIndices.contains(index);
+  }
+
+  Widget _buildSetLabel(int index) {
+    return SizedBox(
+      width: 50,
+      child: Text(
+        'Set ${index + 1}:',
+        style: const TextStyle(fontSize: 12),
+      ),
+    );
+  }
+
+  Widget _buildMinutesField(int index, bool isAutoFilled) {
+    return SizedBox(
+      width: 50,
+      child: TextField(
+        controller: _minutesControllers[index],
+        focusNode: _minutesFocusNodes[index],
+        keyboardType: TextInputType.number,
+        inputFormatters: [NonNegativeIntFormatter()],
+        decoration: _buildFieldDecoration('Min', isAutoFilled),
+        onChanged: (_) => _onMinutesFieldChanged(index),
+      ),
+    );
+  }
+
+  Widget _buildTimeSeparator() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 2),
+      child: Text(':'),
+    );
+  }
+
+  Widget _buildSecondsField(int index, bool isAutoFilled) {
+    return SizedBox(
+      width: 50,
+      child: TextField(
+        controller: _secondsControllers[index],
+        focusNode: _secondsFocusNodes[index],
+        keyboardType: TextInputType.number,
+        inputFormatters: [NonNegativeIntFormatter()],
+        decoration: _buildFieldDecoration('Sec', isAutoFilled),
+        onChanged: (_) => _onSecondsFieldChanged(index),
+      ),
+    );
+  }
+
+  InputDecoration _buildFieldDecoration(String hint, bool isAutoFilled) {
+    return InputDecoration(
+      hintText: hint,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      fillColor: isAutoFilled ? Colors.grey[100] : null,
+      filled: isAutoFilled,
+    );
+  }
+
+  Widget _buildTotalTimeDisplay(int index) {
+    return Text(
+      formatRestTime(_getTotalSecondsAt(index)),
+      style: TextStyle(fontSize: 12, color: Colors.grey[500]),
     );
   }
 

@@ -136,28 +136,40 @@ class _TodayScreenState extends State<TodayScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Today'),
-            Text(
-              _formattedDate,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.normal,
-                color: Theme.of(context).colorScheme.onPrimaryContainer,
-              ),
-            ),
-          ],
-        ),
+        title: _buildAppBarTitle(context),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _todayWorkouts.isEmpty
-              ? _buildEmptyState()
-              : _buildWorkoutList(),
+      body: _buildBody(),
     );
+  }
+
+  Widget _buildAppBarTitle(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Today'),
+        Text(
+          _formattedDate,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.normal,
+            color: Theme.of(context).colorScheme.onPrimaryContainer,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_todayWorkouts.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    return _buildWorkoutList();
   }
 
   Widget _buildEmptyState() {
@@ -207,9 +219,7 @@ class _TodayScreenState extends State<TodayScreen> {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
-      color: isCompleted
-          ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
-          : null,
+      color: _getCardColor(isCompleted),
       child: InkWell(
         onTap: () => _editWorkout(workout),
         borderRadius: BorderRadius.circular(12),
@@ -217,95 +227,137 @@ class _TodayScreenState extends State<TodayScreen> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              // Completion checkbox
-              GestureDetector(
-                onTap: () => _toggleCompletion(workout),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: isCompleted
-                        ? Colors.green
-                        : Theme.of(context).colorScheme.surfaceContainerHighest,
-                    border: isCompleted
-                        ? null
-                        : Border.all(
-                            color: Theme.of(context).colorScheme.outline,
-                            width: 2,
-                          ),
-                  ),
-                  child: isCompleted
-                      ? const Icon(Icons.check, color: Colors.white, size: 20)
-                      : null,
-                ),
-              ),
+              _buildCompletionCheckbox(workout, isCompleted),
               const SizedBox(width: 12),
-
-              // Icon
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: isCompleted
-                      ? Colors.green.withValues(alpha: 0.2)
-                      : Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  workout.icon,
-                  color: isCompleted
-                      ? Colors.green
-                      : Theme.of(context).colorScheme.primary,
-                ),
-              ),
+              _buildWorkoutIcon(workout, isCompleted),
               const SizedBox(width: 16),
-
-              // Workout info
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      workout.name,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        decoration: isCompleted ? TextDecoration.lineThrough : null,
-                        color: isCompleted ? Colors.grey[600] : null,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${isCompleted ? completed!.exercises.length : workout.exercises.length} exercise${(isCompleted ? completed!.exercises.length : workout.exercises.length) != 1 ? 's' : ''}',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    if (workout.exercises.isNotEmpty)
-                      Text(
-                        (isCompleted ? completed!.exercises : workout.exercises)
-                            .map((e) => e.exerciseName)
-                            .join(', '),
-                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
-                ),
-              ),
-
-              // Edit button for completed, chevron for pending
-              if (isCompleted)
-                IconButton(
-                  icon: const Icon(Icons.edit),
-                  onPressed: () => _openCompleteDialog(workout),
-                  tooltip: 'Edit completed workout',
-                )
-              else
-                Icon(Icons.chevron_right, color: Colors.grey[400]),
+              Expanded(child: _buildWorkoutInfo(workout, isCompleted, completed)),
+              _buildTrailingWidget(workout, isCompleted),
             ],
           ),
         ),
       ),
     );
+  }
+
+  Color? _getCardColor(bool isCompleted) {
+    return isCompleted
+        ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3)
+        : null;
+  }
+
+  Widget _buildCompletionCheckbox(Workout workout, bool isCompleted) {
+    return GestureDetector(
+      onTap: () => _toggleCompletion(workout),
+      child: Container(
+        width: 32,
+        height: 32,
+        decoration: _getCheckboxDecoration(isCompleted),
+        child: isCompleted
+            ? const Icon(Icons.check, color: Colors.white, size: 20)
+            : null,
+      ),
+    );
+  }
+
+  BoxDecoration _getCheckboxDecoration(bool isCompleted) {
+    return BoxDecoration(
+      shape: BoxShape.circle,
+      color: isCompleted
+          ? Colors.green
+          : Theme.of(context).colorScheme.surfaceContainerHighest,
+      border: isCompleted
+          ? null
+          : Border.all(
+              color: Theme.of(context).colorScheme.outline,
+              width: 2,
+            ),
+    );
+  }
+
+  Widget _buildWorkoutIcon(Workout workout, bool isCompleted) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: isCompleted
+            ? Colors.green.withValues(alpha: 0.2)
+            : Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(
+        workout.icon,
+        color: isCompleted
+            ? Colors.green
+            : Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+
+  Widget _buildWorkoutInfo(
+    Workout workout,
+    bool isCompleted,
+    CompletedWorkout? completed,
+  ) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildWorkoutName(workout, isCompleted),
+        const SizedBox(height: 4),
+        _buildExerciseCount(workout, isCompleted, completed),
+        if (workout.exercises.isNotEmpty)
+          _buildExerciseList(workout, isCompleted, completed),
+      ],
+    );
+  }
+
+  Widget _buildWorkoutName(Workout workout, bool isCompleted) {
+    return Text(
+      workout.name,
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        decoration: isCompleted ? TextDecoration.lineThrough : null,
+        color: isCompleted ? Colors.grey[600] : null,
+      ),
+    );
+  }
+
+  Widget _buildExerciseCount(
+    Workout workout,
+    bool isCompleted,
+    CompletedWorkout? completed,
+  ) {
+    final count = isCompleted ? completed!.exercises.length : workout.exercises.length;
+    return Text(
+      '$count exercise${count != 1 ? 's' : ''}',
+      style: TextStyle(color: Colors.grey[600]),
+    );
+  }
+
+  Widget _buildExerciseList(
+    Workout workout,
+    bool isCompleted,
+    CompletedWorkout? completed,
+  ) {
+    final exercises = isCompleted ? completed!.exercises : workout.exercises;
+    return Text(
+      exercises.map((e) => e.exerciseName).join(', '),
+      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildTrailingWidget(Workout workout, bool isCompleted) {
+    if (isCompleted) {
+      return IconButton(
+        icon: const Icon(Icons.edit),
+        onPressed: () => _openCompleteDialog(workout),
+        tooltip: 'Edit completed workout',
+      );
+    }
+
+    return Icon(Icons.chevron_right, color: Colors.grey[400]);
   }
 }

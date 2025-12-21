@@ -88,33 +88,43 @@ class _WorkoutsScreenState extends State<WorkoutsScreen> {
         title: const Text('Workouts'),
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _workouts.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No workouts yet.\nTap + to create one!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _workouts.length,
-                  itemBuilder: (context, index) {
-                    final workout = _workouts[index];
-                    return _WorkoutCard(
-                      workout: workout,
-                      onTap: () => _editWorkout(workout),
-                      onDelete: () => _deleteWorkout(workout),
-                    );
-                  },
-                ),
+      body: _buildBody(),
       floatingActionButton: FloatingActionButton(
         onPressed: _addWorkout,
         tooltip: 'Add Workout',
         child: const Icon(Icons.add),
       ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_workouts.isEmpty) {
+      return const Center(
+        child: Text(
+          'No workouts yet.\nTap + to create one!',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16, color: Colors.grey),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _workouts.length,
+      itemBuilder: _buildWorkoutCard,
+    );
+  }
+
+  Widget _buildWorkoutCard(BuildContext context, int index) {
+    final workout = _workouts[index];
+    return _WorkoutCard(
+      workout: workout,
+      onTap: () => _editWorkout(workout),
+      onDelete: () => _deleteWorkout(workout),
     );
   }
 }
@@ -141,53 +151,72 @@ class _WorkoutCard extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  workout.icon,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
+              _buildIconContainer(context),
               const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      workout.name,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${workout.exercises.length} exercise${workout.exercises.length != 1 ? 's' : ''}',
-                      style: TextStyle(color: Colors.grey[600]),
-                    ),
-                    if (workout.exercises.isNotEmpty)
-                      Text(
-                        workout.exercises.map((e) => e.exerciseName).join(', '),
-                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete, color: Colors.red),
-                onPressed: onDelete,
-              ),
+              Expanded(child: _buildWorkoutInfo()),
+              _buildDeleteButton(),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildIconContainer(BuildContext context) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(
+        workout.icon,
+        color: Theme.of(context).colorScheme.primary,
+      ),
+    );
+  }
+
+  Widget _buildWorkoutInfo() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildWorkoutName(),
+        const SizedBox(height: 4),
+        _buildExerciseCount(),
+        if (workout.exercises.isNotEmpty) _buildExerciseList(),
+      ],
+    );
+  }
+
+  Widget _buildWorkoutName() {
+    return Text(
+      workout.name,
+      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+    );
+  }
+
+  Widget _buildExerciseCount() {
+    final count = workout.exercises.length;
+    return Text(
+      '$count exercise${count != 1 ? 's' : ''}',
+      style: TextStyle(color: Colors.grey[600]),
+    );
+  }
+
+  Widget _buildExerciseList() {
+    return Text(
+      workout.exercises.map((e) => e.exerciseName).join(', '),
+      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  Widget _buildDeleteButton() {
+    return IconButton(
+      icon: const Icon(Icons.delete, color: Colors.red),
+      onPressed: onDelete,
     );
   }
 }
@@ -326,102 +355,120 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Name and icon row
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              GestureDetector(
-                onTap: _showIconPicker,
-                child: Container(
-                  width: 56,
-                  height: 56,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
-                  ),
-                  child: Icon(
-                    _selectedIcon,
-                    size: 28,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _nameController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    labelText: 'Workout Name',
-                    hintText: 'e.g., Push Day, Leg Day',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-              ),
-            ],
-          ),
+          _buildNameAndIconRow(context),
           const SizedBox(height: 24),
-
-          // Exercises section
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Exercises',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-              ),
-              TextButton.icon(
-                onPressed: _addExercise,
-                icon: const Icon(Icons.add),
-                label: const Text('Add'),
-              ),
-            ],
-          ),
+          _buildExercisesHeader(),
           const SizedBox(height: 8),
-
-          if (_isAddingNew)
-            ExerciseFormWidget(
-              onSave: _saveNewExercise,
-              onCancel: _cancelEdit,
-              showRestAfterExercise: true,
-            ),
-
-          ..._exercises.asMap().entries.map((entry) {
-            final index = entry.key;
-            final exercise = entry.value;
-            final isExpanded = _expandedExerciseIndex == index;
-
-            if (isExpanded) {
-              return ExerciseFormWidget(
-                exercise: exercise,
-                onSave: (e) => _updateExercise(index, e),
-                onCancel: _cancelEdit,
-                onDelete: () => _deleteExercise(index),
-                showRestAfterExercise: true,
-              );
-            }
-
-            return ExerciseCard(
-              exercise: exercise,
-              onTap: () => setState(() => _expandedExerciseIndex = index),
-            );
-          }),
-
-          if (_exercises.isEmpty && !_isAddingNew)
-            const Padding(
-              padding: EdgeInsets.all(32),
-              child: Center(
-                child: Text(
-                  'No exercises yet.\nTap "Add" to add exercises.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-            ),
+          if (_isAddingNew) _buildNewExerciseForm(),
+          ..._exercises.asMap().entries.map(_buildExerciseWidget),
+          if (_exercises.isEmpty && !_isAddingNew) _buildEmptyState(),
         ],
+      ),
+    );
+  }
+
+  Widget _buildNameAndIconRow(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildIconPicker(context),
+        const SizedBox(width: 12),
+        Expanded(child: _buildNameTextField()),
+      ],
+    );
+  }
+
+  Widget _buildIconPicker(BuildContext context) {
+    return GestureDetector(
+      onTap: _showIconPicker,
+      child: Container(
+        width: 56,
+        height: 56,
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primaryContainer,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Theme.of(context).colorScheme.outline),
+        ),
+        child: Icon(
+          _selectedIcon,
+          size: 28,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNameTextField() {
+    return TextField(
+      controller: _nameController,
+      textCapitalization: TextCapitalization.words,
+      decoration: const InputDecoration(
+        labelText: 'Workout Name',
+        hintText: 'e.g., Push Day, Leg Day',
+        border: OutlineInputBorder(),
+      ),
+    );
+  }
+
+  Widget _buildExercisesHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'Exercises',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        TextButton.icon(
+          onPressed: _addExercise,
+          icon: const Icon(Icons.add),
+          label: const Text('Add'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildNewExerciseForm() {
+    return ExerciseFormWidget(
+      onSave: _saveNewExercise,
+      onCancel: _cancelEdit,
+      showRestAfterExercise: true,
+    );
+  }
+
+  Widget _buildExerciseWidget(MapEntry<int, PlannedExercise> entry) {
+    final index = entry.key;
+    final exercise = entry.value;
+    final isExpanded = _expandedExerciseIndex == index;
+
+    if (isExpanded) {
+      return _buildExpandedExerciseForm(index, exercise);
+    }
+
+    return ExerciseCard(
+      exercise: exercise,
+      onTap: () => setState(() => _expandedExerciseIndex = index),
+    );
+  }
+
+  Widget _buildExpandedExerciseForm(int index, PlannedExercise exercise) {
+    return ExerciseFormWidget(
+      exercise: exercise,
+      onSave: (e) => _updateExercise(index, e),
+      onCancel: _cancelEdit,
+      onDelete: () => _deleteExercise(index),
+      showRestAfterExercise: true,
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return const Padding(
+      padding: EdgeInsets.all(32),
+      child: Center(
+        child: Text(
+          'No exercises yet.\nTap "Add" to add exercises.',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: Colors.grey),
+        ),
       ),
     );
   }
@@ -485,19 +532,22 @@ class _IconOption extends StatelessWidget {
       child: Container(
         width: 48,
         height: 48,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primary
-              : Theme.of(context).colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Icon(
-          icon,
-          color: isSelected
-              ? Colors.white
-              : Theme.of(context).colorScheme.onSurface,
-        ),
+        decoration: _buildDecoration(context),
+        child: Icon(icon, color: _getIconColor(context)),
       ),
     );
+  }
+
+  BoxDecoration _buildDecoration(BuildContext context) {
+    return BoxDecoration(
+      color: isSelected
+          ? Theme.of(context).colorScheme.primary
+          : Theme.of(context).colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(12),
+    );
+  }
+
+  Color _getIconColor(BuildContext context) {
+    return isSelected ? Colors.white : Theme.of(context).colorScheme.onSurface;
   }
 }

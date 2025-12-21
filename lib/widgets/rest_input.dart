@@ -167,54 +167,68 @@ class RestInputState extends State<RestInput> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          widget.label,
-          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-        ),
+        _buildLabel(),
         const SizedBox(height: 4),
-        Row(
-          children: [
-            SizedBox(
-              width: 60,
-              child: TextField(
-                controller: _minutesController,
-                focusNode: _minutesFocusNode,
-                keyboardType: TextInputType.number,
-                inputFormatters: [NonNegativeIntFormatter()],
-                decoration: InputDecoration(
-                  hintText: 'Min',
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  fillColor: _minutesAutoFilled ? Colors.grey[100] : null,
-                  filled: _minutesAutoFilled,
-                ),
-                onChanged: _onMinutesChanged,
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 4),
-              child: Text(':'),
-            ),
-            SizedBox(
-              width: 60,
-              child: TextField(
-                controller: _secondsController,
-                focusNode: _secondsFocusNode,
-                keyboardType: TextInputType.number,
-                inputFormatters: [NonNegativeIntFormatter()],
-                decoration: InputDecoration(
-                  hintText: 'Sec',
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                  fillColor: _secondsAutoFilled ? Colors.grey[100] : null,
-                  filled: _secondsAutoFilled,
-                ),
-                onChanged: _onSecondsChanged,
-              ),
-            ),
-          ],
-        ),
+        _buildInputRow(),
       ],
+    );
+  }
+
+  Widget _buildLabel() {
+    return Text(
+      widget.label,
+      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+    );
+  }
+
+  Widget _buildInputRow() {
+    return Row(
+      children: [
+        _buildMinutesField(),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 4),
+          child: Text(':'),
+        ),
+        _buildSecondsField(),
+      ],
+    );
+  }
+
+  Widget _buildMinutesField() {
+    return SizedBox(
+      width: 60,
+      child: TextField(
+        controller: _minutesController,
+        focusNode: _minutesFocusNode,
+        keyboardType: TextInputType.number,
+        inputFormatters: [NonNegativeIntFormatter()],
+        decoration: _buildFieldDecoration('Min', _minutesAutoFilled),
+        onChanged: _onMinutesChanged,
+      ),
+    );
+  }
+
+  Widget _buildSecondsField() {
+    return SizedBox(
+      width: 60,
+      child: TextField(
+        controller: _secondsController,
+        focusNode: _secondsFocusNode,
+        keyboardType: TextInputType.number,
+        inputFormatters: [NonNegativeIntFormatter()],
+        decoration: _buildFieldDecoration('Sec', _secondsAutoFilled),
+        onChanged: _onSecondsChanged,
+      ),
+    );
+  }
+
+  InputDecoration _buildFieldDecoration(String hint, bool isAutoFilled) {
+    return InputDecoration(
+      hintText: hint,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      fillColor: isAutoFilled ? Colors.grey[100] : null,
+      filled: isAutoFilled,
     );
   }
 
