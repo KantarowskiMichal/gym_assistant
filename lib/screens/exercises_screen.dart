@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/exercise.dart';
 import '../models/workout.dart';
 import '../services/exercise_storage.dart';
+import '../utils/exercise_utils.dart';
 import '../widgets/exercise_form.dart';
 
 class ExercisesScreen extends StatefulWidget {
@@ -310,7 +311,7 @@ class _ExerciseListCard extends StatelessWidget {
       label: Text(exercise.modeLabel),
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
-      backgroundColor: _getModeColor(exercise.mode),
+      backgroundColor: getModeColor(exercise.mode),
     );
   }
 
@@ -319,18 +320,5 @@ class _ExerciseListCard extends StatelessWidget {
         ? ' @ ${exercise.defaultWeight}kg'
         : '';
     return '${exercise.defaultsSummary}$weightSuffix';
-  }
-
-  Color? _getModeColor(ExerciseMode mode) {
-    switch (mode) {
-      case ExerciseMode.reps:
-        return Colors.green[100];
-      case ExerciseMode.variableSets:
-        return Colors.blue[100];
-      case ExerciseMode.pyramid:
-        return Colors.purple[100];
-      case ExerciseMode.static:
-        return Colors.orange[100];
-    }
   }
 }

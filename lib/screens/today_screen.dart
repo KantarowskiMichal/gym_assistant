@@ -4,6 +4,9 @@ import '../models/completed_workout.dart';
 import '../services/workout_storage.dart';
 import '../services/completed_workout_storage.dart';
 import '../widgets/complete_workout_dialog.dart';
+import '../widgets/completion_checkbox.dart';
+import '../widgets/completion_options_dialog.dart';
+import '../widgets/workout_icon_container.dart';
 import 'workouts_screen.dart';
 
 class TodayScreen extends StatefulWidget {
@@ -97,23 +100,7 @@ class _TodayScreenState extends State<TodayScreen> {
       _loadData();
     } else {
       // Prompt user: do you want to make changes?
-      final wantChanges = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Complete Workout'),
-          content: const Text('Do you want to modify the workout before completing?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('No'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Yes'),
-            ),
-          ],
-        ),
-      );
+      final wantChanges = await showCompletionOptionsDialog(context);
 
       if (wantChanges == true) {
         _openCompleteDialog(workout);
@@ -247,50 +234,16 @@ class _TodayScreenState extends State<TodayScreen> {
   }
 
   Widget _buildCompletionCheckbox(Workout workout, bool isCompleted) {
-    return GestureDetector(
+    return CompletionCheckbox(
+      isCompleted: isCompleted,
       onTap: () => _toggleCompletion(workout),
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: _getCheckboxDecoration(isCompleted),
-        child: isCompleted
-            ? const Icon(Icons.check, color: Colors.white, size: 20)
-            : null,
-      ),
-    );
-  }
-
-  BoxDecoration _getCheckboxDecoration(bool isCompleted) {
-    return BoxDecoration(
-      shape: BoxShape.circle,
-      color: isCompleted
-          ? Colors.green
-          : Theme.of(context).colorScheme.surfaceContainerHighest,
-      border: isCompleted
-          ? null
-          : Border.all(
-              color: Theme.of(context).colorScheme.outline,
-              width: 2,
-            ),
     );
   }
 
   Widget _buildWorkoutIcon(Workout workout, bool isCompleted) {
-    return Container(
-      width: 48,
-      height: 48,
-      decoration: BoxDecoration(
-        color: isCompleted
-            ? Colors.green.withValues(alpha: 0.2)
-            : Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Icon(
-        workout.icon,
-        color: isCompleted
-            ? Colors.green
-            : Theme.of(context).colorScheme.primary,
-      ),
+    return WorkoutIconContainer(
+      icon: workout.icon,
+      isCompleted: isCompleted,
     );
   }
 

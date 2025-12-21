@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/input_formatters.dart';
-import 'rest_input.dart';
+import '../utils/exercise_utils.dart' show formatRestTime;
 
 /// Widget for entering rest periods per set with cascading behavior.
 ///

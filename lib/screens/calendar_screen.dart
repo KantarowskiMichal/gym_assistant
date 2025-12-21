@@ -5,6 +5,10 @@ import '../services/workout_storage.dart';
 import '../services/completed_workout_storage.dart';
 import '../utils/input_formatters.dart';
 import '../widgets/complete_workout_dialog.dart';
+import '../widgets/completion_checkbox.dart';
+import '../widgets/completion_options_dialog.dart';
+import '../widgets/confirm_dialog.dart';
+import '../widgets/workout_icon_container.dart';
 import 'workouts_screen.dart';
 
 const _monthNames = [
@@ -168,23 +172,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       _loadData();
     } else {
       // Prompt user: do you want to make changes?
-      final wantChanges = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Complete Workout'),
-          content: const Text('Do you want to modify the workout before completing?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('No'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Yes'),
-            ),
-          ],
-        ),
-      );
+      final wantChanges = await showCompletionOptionsDialog(context);
 
       if (wantChanges == true) {
         _openCompleteDialog(workout, date);
@@ -198,25 +186,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Future<bool?> _showOrphanedUncompleteWarning(Workout workout) {
-    return showDialog<bool>(
+    return showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Workout Record?'),
-        content: Text(
-          'The workout template "${workout.name}" no longer exists. '
+      title: 'Delete Workout Record?',
+      content: 'The workout template "${workout.name}" no longer exists. '
           'Unmarking this as completed will permanently delete this workout record.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      confirmText: 'Delete',
+      isDestructive: true,
     );
   }
 
@@ -280,25 +256,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Future<void> _removeFromCalendar(Workout workout) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Remove from Calendar'),
-        content: Text('Remove "${workout.name}" from calendar? This will not affect the workout template or completed records.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: 'Remove from Calendar',
+      content: 'Remove "${workout.name}" from calendar? This will not affect the workout template or completed records.',
+      confirmText: 'Remove',
+      isDestructive: true,
     );
 
-    if (confirm == true) {
+    if (confirm) {
       await WorkoutStorage.deleteScheduled(workout.id);
       _loadData();
     }
@@ -660,45 +626,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Widget _buildCompletionCheckbox(Workout workout, bool isCompleted) {
-    return GestureDetector(
+    return CompletionCheckbox(
+      isCompleted: isCompleted,
       onTap: () => _toggleCompletion(workout, _selectedDate!),
-      child: Container(
-        width: 32,
-        height: 32,
-        decoration: _getCheckboxDecoration(isCompleted),
-        child: isCompleted
-            ? const Icon(Icons.check, color: Colors.white, size: 20)
-            : null,
-      ),
-    );
-  }
-
-  BoxDecoration _getCheckboxDecoration(bool isCompleted) {
-    return BoxDecoration(
-      shape: BoxShape.circle,
-      color: isCompleted
-          ? Colors.green
-          : Theme.of(context).colorScheme.surfaceContainerHighest,
-      border: isCompleted
-          ? null
-          : Border.all(color: Theme.of(context).colorScheme.outline, width: 2),
     );
   }
 
   Widget _buildWorkoutIconBox(Workout workout, bool isCompleted) {
-    return Container(
-      width: 40,
-      height: 40,
-      decoration: BoxDecoration(
-        color: isCompleted
-            ? Colors.green.withValues(alpha: 0.2)
-            : Theme.of(context).colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Icon(
-        workout.icon,
-        color: isCompleted ? Colors.green : Theme.of(context).colorScheme.primary,
-      ),
+    return WorkoutIconContainer(
+      icon: workout.icon,
+      isCompleted: isCompleted,
+      size: 40,
     );
   }
 

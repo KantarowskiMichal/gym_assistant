@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../utils/input_formatters.dart';
+import '../utils/exercise_utils.dart' show formatRestTime;
 
 /// Widget for entering rest period as minutes and seconds.
 ///
@@ -239,19 +240,5 @@ class RestInputState extends State<RestInput> {
     _minutesFocusNode.dispose();
     _secondsFocusNode.dispose();
     super.dispose();
-  }
-}
-
-/// Format seconds as "Xm Ys" or "Ys" string for display
-String formatRestTime(int totalSeconds) {
-  if (totalSeconds <= 0) return '';
-  final minutes = totalSeconds ~/ 60;
-  final seconds = totalSeconds % 60;
-  if (minutes > 0 && seconds > 0) {
-    return '${minutes}m ${seconds}s';
-  } else if (minutes > 0) {
-    return '${minutes}m';
-  } else {
-    return '${seconds}s';
   }
 }

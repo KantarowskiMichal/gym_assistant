@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/workout.dart';
 import '../services/workout_storage.dart';
-import '../widgets/exercise_form.dart';
+import '../widgets/exercise_list_manager.dart';
+import '../widgets/confirm_dialog.dart';
 
 class WorkoutsScreen extends StatefulWidget {
   const WorkoutsScreen({super.key});
@@ -57,25 +58,15 @@ class _WorkoutsScreenState extends State<WorkoutsScreen> {
   }
 
   Future<void> _deleteWorkout(Workout workout) async {
-    final confirm = await showDialog<bool>(
+    final confirm = await showConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Workout'),
-        content: Text('Delete "${workout.name}"? This will also remove all scheduled instances from the calendar.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
+      title: 'Delete Workout',
+      content: 'Delete "${workout.name}"? This will also remove all scheduled instances from the calendar.',
+      confirmText: 'Delete',
+      isDestructive: true,
     );
 
-    if (confirm == true) {
+    if (confirm) {
       await WorkoutStorage.deleteTemplate(workout.id);
       _loadWorkouts();
     }
@@ -237,8 +228,6 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
   late TextEditingController _nameController;
   late IconData _selectedIcon;
   late List<PlannedExercise> _exercises;
-  int? _expandedExerciseIndex;
-  bool _isAddingNew = false;
 
   @override
   void initState() {
@@ -268,38 +257,9 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
     );
   }
 
-  void _addExercise() {
+  void _onExercisesChanged(List<PlannedExercise> exercises) {
     setState(() {
-      _isAddingNew = true;
-      _expandedExerciseIndex = null;
-    });
-  }
-
-  void _saveNewExercise(PlannedExercise exercise) {
-    setState(() {
-      _exercises.add(exercise);
-      _isAddingNew = false;
-    });
-  }
-
-  void _updateExercise(int index, PlannedExercise exercise) {
-    setState(() {
-      _exercises[index] = exercise;
-      _expandedExerciseIndex = null;
-    });
-  }
-
-  void _deleteExercise(int index) {
-    setState(() {
-      _exercises.removeAt(index);
-      _expandedExerciseIndex = null;
-    });
-  }
-
-  void _cancelEdit() {
-    setState(() {
-      _isAddingNew = false;
-      _expandedExerciseIndex = null;
+      _exercises = exercises;
     });
   }
 
@@ -357,11 +317,13 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
         children: [
           _buildNameAndIconRow(context),
           const SizedBox(height: 24),
-          _buildExercisesHeader(),
-          const SizedBox(height: 8),
-          if (_isAddingNew) _buildNewExerciseForm(),
-          ..._exercises.asMap().entries.map(_buildExerciseWidget),
-          if (_exercises.isEmpty && !_isAddingNew) _buildEmptyState(),
+          ExerciseListManager(
+            initialExercises: _exercises,
+            onExercisesChanged: _onExercisesChanged,
+            insertAtTop: false,
+            allowNameEditingInForm: true,
+            showRestAfterExercise: true,
+          ),
         ],
       ),
     );
@@ -406,69 +368,6 @@ class _WorkoutTemplateEditorState extends State<WorkoutTemplateEditor> {
         labelText: 'Workout Name',
         hintText: 'e.g., Push Day, Leg Day',
         border: OutlineInputBorder(),
-      ),
-    );
-  }
-
-  Widget _buildExercisesHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const Text(
-          'Exercises',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        TextButton.icon(
-          onPressed: _addExercise,
-          icon: const Icon(Icons.add),
-          label: const Text('Add'),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildNewExerciseForm() {
-    return ExerciseFormWidget(
-      onSave: _saveNewExercise,
-      onCancel: _cancelEdit,
-      showRestAfterExercise: true,
-    );
-  }
-
-  Widget _buildExerciseWidget(MapEntry<int, PlannedExercise> entry) {
-    final index = entry.key;
-    final exercise = entry.value;
-    final isExpanded = _expandedExerciseIndex == index;
-
-    if (isExpanded) {
-      return _buildExpandedExerciseForm(index, exercise);
-    }
-
-    return ExerciseCard(
-      exercise: exercise,
-      onTap: () => setState(() => _expandedExerciseIndex = index),
-    );
-  }
-
-  Widget _buildExpandedExerciseForm(int index, PlannedExercise exercise) {
-    return ExerciseFormWidget(
-      exercise: exercise,
-      onSave: (e) => _updateExercise(index, e),
-      onCancel: _cancelEdit,
-      onDelete: () => _deleteExercise(index),
-      showRestAfterExercise: true,
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return const Padding(
-      padding: EdgeInsets.all(32),
-      child: Center(
-        child: Text(
-          'No exercises yet.\nTap "Add" to add exercises.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey),
-        ),
       ),
     );
   }
