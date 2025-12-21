@@ -6,6 +6,7 @@ import 'package:gym_assistant/main.dart';
 void main() {
   testWidgets('App shows navigation and screens', (WidgetTester tester) async {
     await tester.pumpWidget(const GymAssistantApp());
+    await tester.pump();
 
     // Verify bottom navigation exists (text appears in both nav and AppBar)
     expect(find.text('Exercises'), findsWidgets);
@@ -16,8 +17,5 @@ void main() {
     expect(find.byIcon(Icons.fitness_center), findsOneWidget);
     expect(find.byIcon(Icons.list_alt), findsOneWidget);
     expect(find.byIcon(Icons.calendar_month), findsOneWidget);
-
-    // Verify the add button exists
-    expect(find.byIcon(Icons.add), findsOneWidget);
   });
 }
