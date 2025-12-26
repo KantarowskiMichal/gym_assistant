@@ -40,6 +40,12 @@ dependencies:
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.2.2
 
+  # Database
+  drift: ^2.22.1
+  drift_flutter: ^0.2.4
+  path_provider: ^2.1.5
+  path: ^1.9.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -50,6 +56,10 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+
+  # Database code generation
+  drift_dev: ^2.22.1
+  build_runner: ^2.4.14
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
